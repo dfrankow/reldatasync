@@ -31,10 +31,12 @@ class MemoryDatastore():
     def put_if_needed(self, key, obj, seq):
         """Put obj under key if seq is greater"""
         my_obj, my_seq = self.get(key)
-        if my_seq is None or my_seq < seq:
+        if (my_seq is None) or (my_seq < seq) or (my_obj < obj):
             self.put(key, obj, seq)
         else:
-            logging.info("Ignore key %s obj %s seq %s" % (key, obj, seq))
+            logging.info("Ignore key %s obj %s seq %s "
+                         "(compared to obj %s seq %s)" % (
+                key, obj, seq, my_obj, my_seq))
 
     def get_objects_since(self, the_seq):
         """Get objects put with seq > the_seq
@@ -52,6 +54,6 @@ class MemoryDatastore():
 
     def set_peer_sequence_id(self, peer, seq):
         """Get the seq we have for peer"""
-        assert seq >= self.get_peer_sequence_id(peer), (
-            'seq %s peer seq %s' % (seq, self.get_peer_sequence_id(peer)))
+#        assert seq >= self.get_peer_sequence_id(peer), (
+#            'seq %s peer seq %s' % (seq, self.get_peer_sequence_id(peer)))
         self.peer_seq_ids[peer] = seq
