@@ -17,8 +17,8 @@ class TestUtilFunctions(unittest.TestCase):
         # sync leaves both server and client with A v1 and B v1
         sync_both(client, server)
 
-        self.assertTrue(('val1', 1), client.get('A'))
-        self.assertTrue(('val2', 1), client.get('B'))
+        self.assertEqual(('val1', 1), client.get('A'))
+        self.assertEqual(('val2', 1), client.get('B'))
 
-        self.assertTrue(('val1', 1), server.get('A'))
-        self.assertTrue(('val1', 1), server.get('B'))
+        self.assertEqual(('val1', 1), server.get('A'))
+        self.assertEqual(('val2', 1), server.get('B'))
