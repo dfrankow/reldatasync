@@ -69,13 +69,19 @@ class TestDatastore(unittest.TestCase):
             for idx in range(50):
                 # pick item
                 item = random.choice(items)
-                val = random.randint(0, 1000)
-                server.put(Document({'_id': item, 'value': val}))
+                if random.uniform(0, 1) < 0.3:
+                    server.delete(item)
+                else:
+                    val = random.randint(0, 1000)
+                    server.put(Document({'_id': item, 'value': val}))
 
             for idx in range(30):
                 item = random.choice(items)
-                val = random.randint(0, 1000)
-                client.put(Document({'_id': item, 'value': val}))
+                if random.uniform(0, 1) < 0.3:
+                    server.delete(item)
+                else:
+                    val = random.randint(0, 1000)
+                    server.put(Document({'_id': item, 'value': val}))
 
             # sync
             sync_both(client, server)
@@ -94,6 +100,19 @@ class TestDatastore(unittest.TestCase):
         doc2 = server.get('A')
         self.assertTrue('another' not in doc2)
         self.assertTrue('another' in doc)
+
+    def test_delete(self):
+        server = MemoryDatastore('server')
+        doc = Document({'_id': 'A', 'value': 'val1'})
+        server.put(doc)
+        doc1 = server.get('A')
+        self.assertTrue(server.get('A'))
+        server.delete('A')
+        doc2 = server.get('A')
+        import logging
+        logging.info("doc2 %s" % doc2)
+        self.assertEqual(True, doc2['_deleted'])
+        self.assertGreater(doc2['_rev'], doc1['_rev'])
 
 
 class TestDocument(unittest.TestCase):

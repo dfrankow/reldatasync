@@ -9,6 +9,8 @@ _REV = '_rev'
 _ID = '_id'
 _DELETED = '_deleted'
 
+logger = logging.getLogger(__name__)
+
 
 class Document(dict):
     def __init__(self, *arg, **kw):
@@ -94,7 +96,7 @@ class MemoryDatastore(Generic[ID]):
 
         docid = doc[_ID]
         self.datastore[docid] = doc
-        logging.info("datastore %s put docid %s seq %s doc %s" % (
+        logger.debug("datastore %s put docid %s seq %s doc %s" % (
             self.id, docid, doc[_REV], doc
         ))
 
@@ -107,7 +109,7 @@ class MemoryDatastore(Generic[ID]):
         if (my_seq is None) or (my_seq < seq) or (my_doc < doc):
             self.put(doc)
         else:
-            logging.info("Ignore docid %s doc %s seq %s "
+            logger.debug("Ignore docid %s doc %s seq %s "
                          "(compared to doc %s seq %s)" % (
                           docid, doc, seq, my_doc, my_seq))
 
@@ -119,6 +121,21 @@ class MemoryDatastore(Generic[ID]):
             if doc[_REV] > the_seq:
                 result.append(doc)
         return result
+
+    def delete(self, docid: ID) -> None:
+        """Delete an doc in the datastore.
+
+        Returns silently if the doc is not in the datastore.
+        """
+        doc = self.datastore.get(docid, None)
+        if doc and not doc.get(_DELETED, False):
+            # The doc is copied in put, so we can modify it how we wish
+            doc[_DELETED] = True
+
+            # Deletion makes a new rev
+            self.sequence_id += 1
+            doc[_REV] = self.sequence_id
+            logger.debug("deleted doc: %s" % doc)
 
     def get_peer_sequence_id(self, peer: str):
         """Get the seq we have for peer, or zero if we have none."""
