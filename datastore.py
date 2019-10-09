@@ -11,7 +11,7 @@ _DELETED = '_deleted'
 
 
 class Document(dict):
-    def __init__(self,*arg,**kw):
+    def __init__(self, *arg, **kw):
         super(Document, self).__init__(*arg, **kw)
         assert '_id' in self
 
@@ -104,7 +104,7 @@ class MemoryDatastore(Generic[ID]):
     def get_docs_since(self, the_seq: int) -> Sequence[Document]:
         """Get docs put with seq > the_seq
 
-        TODO: Must be returned in order.
+        Returned in order.
         """
         result = []
         for docid, doc in self.datastore.items():
