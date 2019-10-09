@@ -72,6 +72,7 @@ class TestUtilFunctions(unittest.TestCase):
                 val = random.randint(0, 1000)
                 server.put(Document({'_id': item, 'value': val}))
 
+            for idx in range(30):
                 item = random.choice(items)
                 val = random.randint(0, 1000)
                 client.put(Document({'_id': item, 'value': val}))
@@ -83,4 +84,4 @@ class TestUtilFunctions(unittest.TestCase):
             docs_c = [doc for doc in client.get_docs_since(0)]
             docs_s = [doc for doc in server.get_docs_since(0)]
 
-            self.assertEqual(docs_c, docs_s)
+            self.assertEqual(sorted(docs_c), sorted(docs_s))

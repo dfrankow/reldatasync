@@ -62,6 +62,7 @@ class Document(dict):
 
 
 class MemoryDatastore(Generic[ID]):
+    """The memory datastore is transient.  It's only useful for testing."""
     def __init__(self, datastore_id: str):
         self.id = datastore_id
         self.datastore = {}
@@ -82,6 +83,7 @@ class MemoryDatastore(Generic[ID]):
             doc = Document(dict(doc))
             self.sequence_id += 1
             doc[_REV] = self.sequence_id
+
         docid = doc[_ID]
         self.datastore[docid] = doc
         logging.info("datastore %s put docid %s seq %s doc %s" % (
@@ -103,14 +105,12 @@ class MemoryDatastore(Generic[ID]):
 
     def get_docs_since(self, the_seq: int) -> Sequence[Document]:
         """Get docs put with seq > the_seq
-
-        Returned in order.
         """
         result = []
         for docid, doc in self.datastore.items():
             if doc[_REV] > the_seq:
                 result.append(doc)
-        return sorted(result)
+        return result
 
     def get_peer_sequence_id(self, peer: str):
         """Get the seq we have for peer, or zero if we have none."""
