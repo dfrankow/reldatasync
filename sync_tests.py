@@ -5,7 +5,7 @@ from .datastore import MemoryDatastore, Document
 from .sync import sync_both
 
 
-class TestUtilFunctions(unittest.TestCase):
+class TestDatastore(unittest.TestCase):
     def test_sync1(self):
         """Non-overlapping documents from datastore"""
         server = MemoryDatastore('server')
@@ -94,3 +94,12 @@ class TestUtilFunctions(unittest.TestCase):
         doc2 = server.get('A')
         self.assertTrue('another' not in doc2)
         self.assertTrue('another' in doc)
+
+
+class TestDocument(unittest.TestCase):
+    def test_compare(self):
+        doc = Document({'_id': 'A', 'value': 'val1'})
+        self.assertEqual(doc, doc)
+        doc2 = Document({'_id': 'A', 'value': 'val2'})
+        self.assertGreater(doc2, doc)
+        self.assertLess(doc, doc2)
