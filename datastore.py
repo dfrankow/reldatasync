@@ -126,6 +126,6 @@ class MemoryDatastore(Generic[ID]):
 
     def set_peer_sequence_id(self, peer: str, seq: int):
         """Get the seq we have for peer"""
-#        assert seq >= self.get_peer_sequence_id(peer), (
-#            'seq %s peer seq %s' % (seq, self.get_peer_sequence_id(peer)))
+        assert seq >= self.get_peer_sequence_id(peer), (
+            'seq %s peer seq %s' % (seq, self.get_peer_sequence_id(peer)))
         self.peer_seq_ids[peer] = seq
