@@ -1,10 +1,14 @@
 import logging
 
+from .datastore import _REV
+
+
 def sync_pull(client, server):
     # client sync: get objects from server
-    for key, obj, seq in server.get_objects_since(
+    for doc in server.get_docs_since(
             client.get_peer_sequence_id(server.id)):
-        client.put_if_needed(key, obj, seq)
+        seq = doc[_REV]
+        client.put_if_needed(doc)
         client.set_peer_sequence_id(server.id, seq)
 
 
