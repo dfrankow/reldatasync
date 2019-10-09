@@ -60,6 +60,9 @@ class Document(dict):
     def __ge__(self, other):
         return self._compare(other) != -1
 
+    def copy(self):
+        return Document(super().copy())
+
 
 class MemoryDatastore(Generic[ID]):
     """The memory datastore is transient.  It's only useful for testing."""
@@ -71,16 +74,21 @@ class MemoryDatastore(Generic[ID]):
 
     def get(self, docid: ID) -> Document:
         """Return doc, or None if not present."""
-        return self.datastore.get(docid, None)
+        doc = self.datastore.get(docid, None)
+        # Return a copy so our internals cannot be modified
+        if doc:
+            doc = doc.copy()
+        return doc
 
     def put(self, doc: Document) -> None:
         """Put doc under docid.
 
         If no seq, give it one.
         """
+        # copy doc so we don't modify caller's doc
+        doc = doc.copy()
+
         if doc.get(_REV, None) is None:
-            # copy doc to add seq
-            doc = Document(dict(doc))
             self.sequence_id += 1
             doc[_REV] = self.sequence_id
 

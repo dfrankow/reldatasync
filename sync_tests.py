@@ -7,7 +7,7 @@ from .sync import sync_both
 
 class TestUtilFunctions(unittest.TestCase):
     def test_sync1(self):
-        """Non-overlapping objects from datastore"""
+        """Non-overlapping documents from datastore"""
         server = MemoryDatastore('server')
         client = MemoryDatastore('client')
 
@@ -30,7 +30,7 @@ class TestUtilFunctions(unittest.TestCase):
                          server.get('B'))
 
     def test_overlapping_sync(self):
-        """Overlapping objects from datastore"""
+        """Overlapping documents from datastore"""
         server = MemoryDatastore('server')
         client = MemoryDatastore('client')
 
@@ -85,3 +85,12 @@ class TestUtilFunctions(unittest.TestCase):
             docs_s = [doc for doc in server.get_docs_since(0)]
 
             self.assertEqual(sorted(docs_c), sorted(docs_s))
+
+    def test_copy(self):
+        server = MemoryDatastore('server')
+        doc = Document({'_id': 'A', 'value': 'val1'})
+        server.put(doc)
+        doc['another'] = 'foo'
+        doc2 = server.get('A')
+        self.assertTrue('another' not in doc2)
+        self.assertTrue('another' in doc)
