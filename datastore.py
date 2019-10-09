@@ -1,7 +1,7 @@
 """An abstraction of a datastore, to use for syncing."""
 
 import logging
-from typing import Any, Dict, TypeVar, Generic, NewType
+from typing import Sequence, TypeVar, Generic
 
 ID = TypeVar('ID')
 
@@ -101,14 +101,16 @@ class MemoryDatastore(Generic[ID]):
                          "(compared to doc %s seq %s)" % (
                           docid, doc, seq, my_doc, my_seq))
 
-    def get_docs_since(self, the_seq: int):
+    def get_docs_since(self, the_seq: int) -> Sequence[Document]:
         """Get docs put with seq > the_seq
 
         TODO: Must be returned in order.
         """
+        result = []
         for docid, doc in self.datastore.items():
             if doc[_REV] > the_seq:
-                yield doc
+                result.append(doc)
+        return sorted(result)
 
     def get_peer_sequence_id(self, peer: str):
         """Get the seq we have for peer, or zero if we have none."""
