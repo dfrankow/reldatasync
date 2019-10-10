@@ -3,7 +3,7 @@ version: "3"
 services:
   # Note for connecting: host is 'db', default user is 'postgres' no password
   db:
-    image: postgres:11
+    image: postgres:9.5
     environment:
       - POSTGRES_DB=data_sync
     volumes:
