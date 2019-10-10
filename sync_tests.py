@@ -1,8 +1,8 @@
 import unittest
 import random
 
-from .datastore import MemoryDatastore, Document
-from .sync import sync_both
+from datastore import MemoryDatastore, Document
+from sync import sync_both
 
 
 class TestDatastore(unittest.TestCase):

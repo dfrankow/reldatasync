@@ -1,6 +1,6 @@
 import logging
 
-from .datastore import _REV
+from datastore import _REV
 
 
 def sync_pull(client, server):

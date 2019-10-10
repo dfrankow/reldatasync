@@ -1,0 +1,32 @@
+version: "3"
+
+services:
+  db:
+    image: postgres:11
+    environment:
+      - POSTGRES_DB=data_sync
+    volumes:
+      - postgres_data_sync:/var/lib/postgresql/data/
+      # mount the current directory in case we want to restore postgres dumps
+      - .:/app
+    # Open up a local port to Postgres, not in conflict with
+    # any other Postgres you may already be running
+    ports:
+      - "6644:5432"
+
+  data_sync:
+    build: .
+    # env_file: [".env"]
+    depends_on: ["db"]
+    environment:
+      # default user "postgres" at host "db" (service above)
+      - DATABASE_URL=postgres://postgres@db/healthdb
+      - PYTHONDONTWRITEBYTECODE=true
+      - PYTHONPATH=.
+    volumes:
+      # mount current directory so that changes in files are reflected
+      # in the running envirinment
+      - .:/app
+
+volumes:
+  postgres_data_sync:

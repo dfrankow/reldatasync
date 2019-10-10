@@ -12,4 +12,11 @@ each other regularly.
 Tests
 -----
 
-To run tests: `nosetests`
+To run tests:
+
+```
+$ docker-compose run data_sync nosetests sync_tests
+```
+
+You shouldn't have to give the "sync_tests", but
+nosetests gets confused about the path.
