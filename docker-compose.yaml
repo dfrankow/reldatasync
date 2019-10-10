@@ -1,6 +1,7 @@
 version: "3"
 
 services:
+  # Note for connecting: host is 'db', default user is 'postgres' no password
   db:
     image: postgres:11
     environment:
@@ -19,8 +20,6 @@ services:
     # env_file: [".env"]
     depends_on: ["db"]
     environment:
-      # default user "postgres" at host "db" (service above)
-      - DATABASE_URL=postgres://postgres@db/healthdb
       - PYTHONDONTWRITEBYTECODE=true
       - PYTHONPATH=.
     volumes:
