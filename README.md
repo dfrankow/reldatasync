@@ -24,3 +24,17 @@ $ docker-compose run data_sync nosetests sync_tests
 
 You shouldn't have to give the "sync_tests", but
 nosetests gets confused about the path.
+
+To run tests and show logging from the `sync_tests` logger:
+
+```
+$ docker-compose run data_sync nosetests --debug=sync_tests sync_tests
+```
+
+See also [stackoverflow](https://stackoverflow.com/questions/32565562/make-nose-test-runner-show-logging-even-if-tests-pass).
+
+To see the postgres DB:
+
+```
+$ docker-compose run db psql -h db -U postgres
+```

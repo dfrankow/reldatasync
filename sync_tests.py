@@ -129,6 +129,8 @@ class TestMemoryDatastore(_TestDatastore):
 class TestPostgresDatastore(_TestDatastore):
     client_connstr = None
     server_connstr = None
+    # SAME_DB: if True, put two tables in one DB; else put one table in two DBs.
+    SAME_DB = False
 
     @staticmethod
     def _dbconnstr(dbname=None):
@@ -157,7 +159,7 @@ class TestPostgresDatastore(_TestDatastore):
     @staticmethod
     def _create_test_db(dbname):
         TestPostgresDatastore._create_test_db1(dbname)
-        TestPostgresDatastore._create_test_db2(dbname)
+        TestPostgresDatastore._create_test_tables(dbname)
 
     @staticmethod
     def _create_test_db1(dbname):
@@ -185,12 +187,14 @@ class TestPostgresDatastore(_TestDatastore):
         TestPostgresDatastore.exec_sql(exec_func, dbname=dbname)
 
     @staticmethod
-    def _create_test_db2(dbname):
+    def _create_test_tables(dbname):
         def exec_func(curs):
             TestPostgresDatastore._create_table_if_not_exists(
                 dbname,
                 'data_sync_revisions',
-                'sequence_id int not null')
+                'datastore_id text not null, sequence_id int not null')
+            # docs1 only needed on server, and docs2 on client
+            # but it's easier to just create both tables on both
             TestPostgresDatastore._create_table_if_not_exists(
                 dbname,
                 'docs1',
@@ -201,23 +205,32 @@ class TestPostgresDatastore(_TestDatastore):
                 'docs2',
                 '_id text UNIQUE not null, _rev int not null,'
                 ' value text, _deleted bool')
-            # Init sequence_id if not present
-            # "ON CONFLICT" requires postgres 9.5+
-            # See also https://stackoverflow.com/a/17267423/34935
-            # See also https://stackoverflow.com/a/30118648/34935
-            curs.execute(
-                "INSERT INTO data_sync_revisions (sequence_id) VALUES (0)"
-                " ON CONFLICT DO NOTHING")
+        TestPostgresDatastore.exec_sql(exec_func, dbname=dbname)
+
+    @staticmethod
+    def _clear_tables(dbname):
+        def exec_func(curs):
+            curs.execute("DELETE FROM data_sync_revisions")
+            curs.execute("DELETE FROM docs1")
+            curs.execute("DELETE FROM docs2")
         TestPostgresDatastore.exec_sql(exec_func, dbname=dbname)
 
     @classmethod
     def setUpClass(cls):
         super(TestPostgresDatastore, cls).setUpClass()
         # create server and client databases
-        cls.server_connstr = TestPostgresDatastore._dbconnstr('test_server')
-        TestPostgresDatastore._create_test_db('test_server')
-        cls.client_connstr = TestPostgresDatastore._dbconnstr('test_client')
-        TestPostgresDatastore._create_test_db('test_client')
+        cls.server_dbname = 'test_server'
+        cls.server_connstr = TestPostgresDatastore._dbconnstr(cls.server_dbname)
+        TestPostgresDatastore._create_test_db(cls.server_dbname)
+
+        if TestPostgresDatastore.SAME_DB:
+            cls.client_dbname = cls.server_dbname
+            cls.client_connstr = cls.server_connstr
+        else:
+            cls.client_dbname = 'test_client'
+            cls.client_connstr = TestPostgresDatastore._dbconnstr(
+                cls.client_dbname)
+            TestPostgresDatastore._create_test_db(cls.client_dbname)
 
     @staticmethod
     def _drop_db(dbname):
@@ -226,16 +239,23 @@ class TestPostgresDatastore(_TestDatastore):
 
     @classmethod
     def tearDownClass(cls):
-        TestPostgresDatastore._drop_db('test_server')
-        TestPostgresDatastore._drop_db('test_client')
+        TestPostgresDatastore._drop_db(cls.server_dbname)
+        if not TestPostgresDatastore.SAME_DB:
+            TestPostgresDatastore._drop_db(cls.client_dbname)
 
     def setUp(self):
         super().setUp()
+        # Clear tables for server and client
+        TestPostgresDatastore._clear_tables(
+            TestPostgresDatastore.server_dbname)
+        TestPostgresDatastore._clear_tables(
+            TestPostgresDatastore.client_dbname)
+
         self.server = PostgresDatastore(
             'server', TestPostgresDatastore.server_connstr, 'docs1')
         self.server.__enter__()
         self.client = PostgresDatastore(
-            'server', TestPostgresDatastore.client_connstr, 'docs2')
+            'client', TestPostgresDatastore.client_connstr, 'docs2')
         self.client.__enter__()
 
     def tearDown(self) -> None:

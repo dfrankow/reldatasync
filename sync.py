@@ -2,6 +2,8 @@ import logging
 
 from datastore import _REV
 
+logger = logging.getLogger(__name__)
+
 
 def sync_pull(destination, source):
     """Pull changes from source to destination.
@@ -52,10 +54,10 @@ def sync_both(client, server):
     #   dest  : 3*      source: 3*
 
     # 1. server -> client sync: get objects from server
-    logging.info("*************** sync from server to client")
+    logger.info("*************** sync from server to client")
     sync_pull(client, server)
     # 2. client -> server sync: put client objects in server
-    logging.info("*************** sync from client to server")
+    logger.info("*************** sync from client to server")
     sync_pull(server, client)
     # 3. sync server seq -> client's server seq
     client.set_peer_sequence_id(server.id, server.sequence_id)
@@ -72,4 +74,4 @@ def sync_both(client, server):
         'client thinks server seq is %d, server thinks seq is %d' % (
          client.get_peer_sequence_id(server.id), server.sequence_id))
 
-    logging.info("*************** sync done, seq is %d" % client.sequence_id)
+    logger.info("*************** sync done, seq is %d" % client.sequence_id)

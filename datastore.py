@@ -220,7 +220,24 @@ class PostgresDatastore(Datastore):
     def __enter__(self):
         super().__enter__()
         self.conn = psycopg2.connect(self.conn_str)
+
+        # Autocommit to allow two connections to the same DB without deadlock
+        # TODO(dan): Should any class members not auto-commit?
+        self.conn.set_isolation_level(
+            psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+
         self.cursor = self.conn.cursor()
+
+        # TODO(dan): Create the data_sync_revisions table if needed
+
+        # Init sequence_id if not present
+        # "ON CONFLICT" requires postgres 9.5+
+        # See also https://stackoverflow.com/a/17267423/34935
+        # See also https://stackoverflow.com/a/30118648/34935
+        self.cursor.execute(
+            "INSERT INTO data_sync_revisions (datastore_id, sequence_id)"
+            " VALUES (%s, 0)"
+            " ON CONFLICT DO NOTHING", (self.id,))
 
         # Check that the right tables exist
         self.cursor.execute("SELECT sequence_id FROM data_sync_revisions")
@@ -310,7 +327,7 @@ class PostgresDatastore(Datastore):
 
     def get_docs_since(self, the_seq: int) -> Sequence[Document]:
         """Get docs put with seq > the_seq, unordered."""
-        # TODO(dan): Use this safer way if I can get it to work:
+        # TODO(dan): Use this safer way.  the_seq must be a tuple.
         # self.cursor.execute(
         #     "SELECT * FROM %s WHERE _rev > %%s" % self.tablename, the_seq)
         self.cursor.execute(
@@ -321,7 +338,8 @@ class PostgresDatastore(Datastore):
     def _increment_sequence_id(self):
         self.cursor.execute(
             "UPDATE data_sync_revisions set sequence_id = sequence_id+1"
-            " RETURNING sequence_id")
+            " WHERE datastore_id=%s"
+            " RETURNING sequence_id", (self.id,))
         new_val = self.cursor.fetchone()[0]
         super()._increment_sequence_id()
         assert self._sequence_id == new_val, (
