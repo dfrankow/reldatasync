@@ -101,6 +101,9 @@ class Datastore(Generic[ID], ABC):
         self._sequence_id += 1
 
     def _set_sequence_id(self, the_id):
+        logger.info("%s: set seq_id from %d to %d"
+                    % (self.id, self.sequence_id, the_id))
+        assert the_id >= self._sequence_id
         self._sequence_id = the_id
 
     @property
@@ -154,10 +157,16 @@ class Datastore(Generic[ID], ABC):
         return self.peer_seq_ids.get(peer, 0)
 
     def set_peer_sequence_id(self, peer: str, seq: int):
-        """Get the seq we have for peer"""
-        assert seq >= self.get_peer_sequence_id(peer), (
-            'seq %s peer seq %s' % (seq, self.get_peer_sequence_id(peer)))
-        self.peer_seq_ids[peer] = seq
+        """Set new peer sequence id, if seq > what we have."""
+        if seq > self.get_peer_sequence_id(peer):
+            self.peer_seq_ids[peer] = seq
+            action = "set"
+        else:
+            action = "ignore setting"
+
+        logger.info("%s: %s %s seq_id from %d to %d"
+                    % (self.id, action, peer,
+                       self.get_peer_sequence_id(peer), seq))
 
     @abstractmethod
     def get(self, docid: ID) -> Document:
@@ -204,7 +213,7 @@ class MemoryDatastore(Datastore):
 class PostgresDatastore(Datastore):
     def __init__(self, datastore_id: str, conn_str: str,
                  tablename: str):
-        super().__init__(datastore_id)
+        super().__init__('%s.%s' % (datastore_id, tablename))
         self.tablename = tablename
         self.conn_str = conn_str
 

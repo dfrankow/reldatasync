@@ -67,9 +67,10 @@ class _TestDatastore(unittest.TestCase):
     def test_long_streaks(self):
         items = ['a', 'b', 'c', 'd', 'e']
 
-        for jdx in range(10):
+        for jdx in range(3):
             # some puts and deletes for server, then client
-            for idx in range(50):
+            num_steps = random.randint(2, 20)
+            for idx in range(num_steps):
                 # pick item
                 item = random.choice(items)
                 if random.uniform(0, 1) < 0.3:
@@ -78,7 +79,8 @@ class _TestDatastore(unittest.TestCase):
                     val = random.randint(0, 1000)
                     self.server.put(Document({'_id': item, 'value': val}))
 
-            for idx in range(30):
+            num_steps = random.randint(2, 20)
+            for idx in range(num_steps):
                 item = random.choice(items)
                 if random.uniform(0, 1) < 0.3:
                     self.client.delete(item)
@@ -94,6 +96,7 @@ class _TestDatastore(unittest.TestCase):
             docs_s = [doc for doc in self.server.get_docs_since(0)]
 
             self.assertEqual(sorted(docs_c), sorted(docs_s))
+        # self.fail("TEST")
 
     def test_copy(self):
         doc = Document({'_id': 'A', 'value': 'val1'})
@@ -190,7 +193,12 @@ class TestPostgresDatastore(_TestDatastore):
                 'sequence_id int not null')
             TestPostgresDatastore._create_table_if_not_exists(
                 dbname,
-                'docs',
+                'docs1',
+                '_id text UNIQUE not null, _rev int not null,'
+                ' value text, _deleted bool')
+            TestPostgresDatastore._create_table_if_not_exists(
+                dbname,
+                'docs2',
                 '_id text UNIQUE not null, _rev int not null,'
                 ' value text, _deleted bool')
             # Init sequence_id if not present
@@ -224,10 +232,10 @@ class TestPostgresDatastore(_TestDatastore):
     def setUp(self):
         super().setUp()
         self.server = PostgresDatastore(
-            'server', TestPostgresDatastore.server_connstr, 'docs')
+            'server', TestPostgresDatastore.server_connstr, 'docs1')
         self.server.__enter__()
         self.client = PostgresDatastore(
-            'client', TestPostgresDatastore.client_connstr, 'docs')
+            'server', TestPostgresDatastore.client_connstr, 'docs2')
         self.client.__enter__()
 
     def tearDown(self) -> None:
