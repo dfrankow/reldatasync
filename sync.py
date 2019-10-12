@@ -17,7 +17,7 @@ def sync_pull(client, server):
     # in other words, catch up my clock to the other clock
     # otherwise, my revs could start losing all the time
     if client.sequence_id < server.sequence_id:
-        client.sequence_id = server.sequence_id
+        client._set_sequence_id(server.sequence_id)
 
 
 def sync_both(client, server):

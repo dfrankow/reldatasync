@@ -68,7 +68,7 @@ class _TestDatastore(unittest.TestCase):
         items = ['a', 'b', 'c', 'd', 'e']
 
         for jdx in range(10):
-            # 50 puts for server and client
+            # some puts and deletes for server, then client
             for idx in range(50):
                 # pick item
                 item = random.choice(items)
@@ -81,10 +81,10 @@ class _TestDatastore(unittest.TestCase):
             for idx in range(30):
                 item = random.choice(items)
                 if random.uniform(0, 1) < 0.3:
-                    self.server.delete(item)
+                    self.client.delete(item)
                 else:
                     val = random.randint(0, 1000)
-                    self.server.put(Document({'_id': item, 'value': val}))
+                    self.client.put(Document({'_id': item, 'value': val}))
 
             # sync
             sync_both(self.client, self.server)

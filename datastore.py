@@ -88,7 +88,7 @@ class Document(dict):
 class Datastore(Generic[ID], ABC):
     def __init__(self, datastore_id: str):
         self.id = datastore_id
-        self.sequence_id = 0
+        self._sequence_id = 0
         self.peer_seq_ids = {}
 
     def __enter__(self):
@@ -98,7 +98,15 @@ class Datastore(Generic[ID], ABC):
         pass
 
     def _increment_sequence_id(self):
-        self.sequence_id += 1
+        self._sequence_id += 1
+
+    def _set_sequence_id(self, the_id):
+        self._sequence_id = the_id
+
+    @property
+    def sequence_id(self):
+        """Read-only sequence_id"""
+        return self._sequence_id
 
     def _pre_put(self, doc):
         # copy doc so we don't modify caller's doc
@@ -106,7 +114,7 @@ class Datastore(Generic[ID], ABC):
 
         if doc.get(_REV, None) is None:
             self._increment_sequence_id()
-            doc[_REV] = self.sequence_id
+            doc[_REV] = self._sequence_id
 
         logger.debug("datastore %s put docid %s seq %s doc %s" % (
             self.id, doc[_ID], doc[_REV], doc
@@ -137,7 +145,7 @@ class Datastore(Generic[ID], ABC):
             doc[_DELETED] = True
             # Deletion makes a new rev
             self._increment_sequence_id()
-            doc[_REV] = self.sequence_id
+            doc[_REV] = self._sequence_id
             self.put(doc)
             logger.debug("deleted doc: %s" % doc)
 
@@ -207,7 +215,7 @@ class PostgresDatastore(Datastore):
 
         # Check that the right tables exist
         self.cursor.execute("SELECT sequence_id FROM data_sync_revisions")
-        self.sequence_id = self.cursor.fetchone()[0]
+        self._sequence_id = self.cursor.fetchone()[0]
 
         # Get the column names for self.tablename
         self.cursor.execute("SELECT * FROM %s LIMIT 0" % self.tablename)
@@ -243,6 +251,19 @@ class PostgresDatastore(Datastore):
         if not the_dict[_DELETED]:
             del the_dict[_DELETED]
         return Document(the_dict)
+
+    def _set_sequence_id(self, the_id):
+        # Get this to work:
+        # self.cursor.execute(
+        #     "UPDATE data_sync_revisions set sequence_id = %s"
+        #     " RETURNING sequence_id", the_id)
+        self.cursor.execute(
+            "UPDATE data_sync_revisions set sequence_id = %s"
+            " RETURNING sequence_id" % the_id)
+        new_val = self.cursor.fetchone()[0]
+        super()._set_sequence_id(the_id)
+        assert self._sequence_id == new_val, (
+                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
 
     def get(self, docid: ID) -> Document:
         """Return doc, or None if not present."""
@@ -294,4 +315,5 @@ class PostgresDatastore(Datastore):
             " RETURNING sequence_id")
         new_val = self.cursor.fetchone()[0]
         super()._increment_sequence_id()
-        assert self.sequence_id == new_val
+        assert self._sequence_id == new_val, (
+                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
