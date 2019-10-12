@@ -64,29 +64,25 @@ class _TestDatastore(unittest.TestCase):
         self.assertEqual(Document({'_id': 'C', 'value': 'val4', '_rev': 2}),
                          self.server.get('C'))
 
+    @staticmethod
+    def _some_datastore_mods(datastore, items):
+        num_steps = random.randint(2, 20)
+        for idx in range(num_steps):
+            # pick item
+            item = random.choice(items)
+            if random.uniform(0, 1) < 0.3:
+                datastore.delete(item)
+            else:
+                val = random.randint(0, 1000)
+                datastore.put(Document({'_id': item, 'value': val}))
+
     def test_long_streaks(self):
         items = ['a', 'b', 'c', 'd', 'e']
 
         for jdx in range(3):
-            # some puts and deletes for server, then client
-            num_steps = random.randint(2, 20)
-            for idx in range(num_steps):
-                # pick item
-                item = random.choice(items)
-                if random.uniform(0, 1) < 0.3:
-                    self.server.delete(item)
-                else:
-                    val = random.randint(0, 1000)
-                    self.server.put(Document({'_id': item, 'value': val}))
-
-            num_steps = random.randint(2, 20)
-            for idx in range(num_steps):
-                item = random.choice(items)
-                if random.uniform(0, 1) < 0.3:
-                    self.client.delete(item)
-                else:
-                    val = random.randint(0, 1000)
-                    self.client.put(Document({'_id': item, 'value': val}))
+            # some mods for server, then client
+            _TestDatastore._some_datastore_mods(self.server, items)
+            _TestDatastore._some_datastore_mods(self.client, items)
 
             # sync
             sync_both(self.client, self.server)
