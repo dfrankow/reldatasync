@@ -327,11 +327,8 @@ class PostgresDatastore(Datastore):
 
     def get_docs_since(self, the_seq: int) -> Sequence[Document]:
         """Get docs put with seq > the_seq, unordered."""
-        # TODO(dan): Use this safer way.  the_seq must be a tuple.
-        # self.cursor.execute(
-        #     "SELECT * FROM %s WHERE _rev > %%s" % self.tablename, the_seq)
         self.cursor.execute(
-            "SELECT * FROM %s WHERE _rev > %s" % (self.tablename, the_seq))
+            "SELECT * FROM %s WHERE _rev > %%s" % self.tablename, (the_seq,))
         for docrow in self.cursor.fetchall():
             yield self._row_to_doc(docrow)
 
