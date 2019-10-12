@@ -1,6 +1,8 @@
 Introduction
 ------------
 
+NOTE: This is unreleased software.  It's not done.
+
 This is intended to be a simple implementation of synchronizing data
 between two data sources with a "last write wins" policy.
 
