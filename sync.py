@@ -1,7 +1,5 @@
 import logging
 
-from datastore import _REV
-
 logger = logging.getLogger(__name__)
 
 
@@ -14,7 +12,6 @@ def sync_pull(destination, source):
     # since we last synced
     old_peer_seq_id = destination.get_peer_sequence_id(source.id)
     for doc in source.get_docs_since(old_peer_seq_id):
-        seq = doc[_REV]
         destination.put_if_needed(doc)
 
     # destination has all updates up to source.sequence_id now
