@@ -221,10 +221,9 @@ class PostgresDatastore(Datastore):
         super().__enter__()
         self.conn = psycopg2.connect(self.conn_str)
 
-        # Autocommit to allow two connections to the same DB without deadlock
-        # TODO(dan): Should any class members not auto-commit?
-        self.conn.set_isolation_level(
-            psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        # TODO(dan): What exactly is our commit policy?
+        # self.conn.set_isolation_level(
+        #     psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
         self.cursor = self.conn.cursor()
 

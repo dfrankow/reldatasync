@@ -126,7 +126,7 @@ class TestPostgresDatastore(_TestDatastore):
     client_connstr = None
     server_connstr = None
     # SAME_DB: if True, put two tables in one DB; else put one table in two DBs.
-    SAME_DB = False
+    SAME_DB = True
 
     @staticmethod
     def _dbconnstr(dbname=None):
