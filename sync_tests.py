@@ -4,7 +4,6 @@ import unittest
 import random
 
 from datastore import MemoryDatastore, PostgresDatastore, Document
-from sync import sync_both
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ class _TestDatastore(unittest.TestCase):
         self.client.put(Document({'_id': 'B', 'value': 'val2'}))
 
         # sync leaves both server and client with A val1, B val2
-        sync_both(self.client, self.server)
+        self.client.sync_both_directions(self.server)
 
         self.assertEqual(Document({'_id': 'A', 'value': 'val1', '_rev': 1}),
                          self.client.get('A'))
@@ -38,6 +37,14 @@ class _TestDatastore(unittest.TestCase):
         self.assertEqual(Document({'_id': 'B', 'value': 'val2', '_rev': 1}),
                          self.server.get('B'))
 
+    def test_put_if_needed(self):
+        """put_if_needed doesn't put a second time"""
+        doc = Document({'_id': 'A', 'value': 'val1'})
+        # put the doc
+        self.assertEqual(1, self.server.put_if_needed(doc))
+        # doc is already present
+        self.assertEqual(0, self.server.put_if_needed(doc))
+
     def test_overlapping_sync(self):
         """Overlapping documents from datastore"""
         # server makes object A v1
@@ -48,7 +55,7 @@ class _TestDatastore(unittest.TestCase):
         self.client.put(Document({'_id': 'C', 'value': 'val4'}))
 
         # sync leaves both server and client with A val1,  B val2, C val4
-        sync_both(self.client, self.server)
+        self.client.sync_both_directions(self.server)
 
         self.assertEqual(Document({'_id': 'A', 'value': 'val1', '_rev': 1}),
                          self.client.get('A'))
@@ -85,7 +92,7 @@ class _TestDatastore(unittest.TestCase):
             _TestDatastore._some_datastore_mods(self.client, items)
 
             # sync
-            sync_both(self.client, self.server)
+            self.client.sync_both_directions(self.server)
 
             # server and client should now contain the same stuff
             docs_c = [doc for doc in self.client.get_docs_since(0)]

@@ -126,17 +126,24 @@ class Datastore(Generic[ID], ABC):
         return doc
 
     def put_if_needed(self, doc: Document) -> None:
-        """Put doc under docid if seq is greater"""
+        """Put doc under docid if seq is greater
+
+        Return number of records actually put (0 or 1).
+        """
+        ret = 0
         docid = doc[_ID]
-        seq = doc[_REV]
+        # If there is no revision, treat it like rev 0
+        seq = doc.get(_REV, 0)
         my_doc = self.get(docid)
         my_seq = my_doc.get(_REV, None) if my_doc else None
         if (my_seq is None) or (my_seq < seq) or (my_doc < doc):
             self.put(doc)
+            ret = 1
         else:
             logger.debug("Ignore docid %s doc %s seq %s "
                          "(compared to doc %s seq %s)" % (
                           docid, doc, seq, my_doc, my_seq))
+        return ret
 
     def delete(self, docid: ID) -> None:
         """Delete an doc in the datastore.
@@ -179,6 +186,104 @@ class Datastore(Generic[ID], ABC):
     @abstractmethod
     def get_docs_since(self, the_seq: int) -> Sequence[Document]:
         pass
+
+    @staticmethod
+    def _pull_changes(destination, source):
+        """Pull changes from source to destination.
+
+        Also update destination seq id, and destination peer seq id.
+
+        Return number of docs changed on destination
+        """
+        # destination sync: get docs from source with lowest seqs
+        # since we last synced
+        docs_changed = 0
+        old_peer_seq_id = destination.get_peer_sequence_id(source.id)
+        for doc in source.get_docs_since(old_peer_seq_id):
+            docs_changed += destination.put_if_needed(doc)
+
+        # destination has all updates up to source.sequence_id now
+        assert source.sequence_id >= old_peer_seq_id
+        destination.set_peer_sequence_id(source.id, source.sequence_id)
+
+        # keep destination sequence_id up to date
+        # in other words, catch up my clock to the other clock
+        # otherwise, my revs could start losing all the time
+        if destination.sequence_id < source.sequence_id:
+            destination._set_sequence_id(source.sequence_id)
+        return docs_changed
+
+    def push_changes(self, destination):
+        """Push changes from self to destination.
+
+        Also update destination seq id, and destination peer seq id.
+
+        Return number of docs changed on destination.
+        """
+        return Datastore._pull_changes(destination, self)
+
+    def pull_changes(self, source):
+        """Pull changes from source to self.
+
+        Also update self seq id, and self peer seq id.
+
+        Return number of docs changed (in self).
+        """
+        return Datastore._pull_changes(self, source)
+
+    def sync_both_directions(self, destination):
+        """Sync client and server in both directions
+
+        Completely updated by the end, unless destination has been changing.
+
+        :param self: one datastore
+        :param destination: another datastore
+        :return: None
+        """
+        # Here is an example diagram, with source on the left, dest on the right
+        # source made 2 changes, dest made 3, now they are going to sync.
+        #
+        #   source: 2
+        #   dest  : 0
+        #
+        #                   dest  : 3
+        #                   source: 0
+        #
+        #   source: 2 ----> dest  : 3*
+        #   dest  : 0       source: 2*
+        #
+        #   source: 3* <--- dest  : 3*
+        #   dest  : 3*      source: 2
+        #
+        #   source: 3* ---> dest  : 3*
+        #   dest  : 3*      source: 3*
+
+        # 1. source -> destination
+        logger.info("*************** push changes from source to destination")
+        self.push_changes(destination)
+        # 2. destination -> source
+        logger.info("*************** pull changes from destination to source")
+        self.pull_changes(destination)
+        # 3. push source seq -> destination seq
+        # source.set_peer_sequence_id(destination.id, destination.sequence_id)
+        final_changes = self.push_changes(destination)
+
+        # Since nothing else changed, only the sequence # was synchronized
+        assert final_changes == 0
+
+        # now their "clocks" are synchronized
+        assert destination.sequence_id == self.sequence_id, (
+            "server.sequence_id %d client.sequence_id %s" %
+            (destination.sequence_id, self.sequence_id))
+        # now they know about each others' clocks
+        assert destination.get_peer_sequence_id(self.id) == self.sequence_id, (
+            'server thinks client seq is %d, client thinks seq is %d' % (
+             destination.get_peer_sequence_id(self.id), self.sequence_id))
+        assert self.get_peer_sequence_id(destination.id) == destination.sequence_id, (
+            'client thinks server seq is %d, server thinks seq is %d' % (
+             self.get_peer_sequence_id(destination.id), destination.sequence_id))
+
+        logger.info("*************** sync done, seq is %d" % self.sequence_id)
 
 
 class MemoryDatastore(Datastore):
