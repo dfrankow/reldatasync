@@ -1,11 +1,11 @@
 """An abstraction of a datastore, to use for syncing."""
 
 from abc import ABC, abstractmethod
-
+from collections import OrderedDict
 import logging
-from typing import Sequence, TypeVar, Generic
-
 import psycopg2
+
+from typing import Sequence, TypeVar, Generic, Tuple
 
 ID = TypeVar('ID')
 
@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 class Document(dict):
     def __init__(self, *arg, **kw):
         super(Document, self).__init__(*arg, **kw)
-        assert '_id' in self
+        assert _ID in self
 
     @staticmethod
-    def _compare_vals(one, two):
+    def _compare_vals(one, two) -> int:
         # comparisons have to happen in the right order to respect None
         if one is None and two is None:
             return 0
@@ -37,7 +37,7 @@ class Document(dict):
         else:
             return 0
 
-    def _compare(self, other):
+    def _compare(self, other) -> int:
         """Return -1 if doc1 < doc2, 0 if equal, 1 if doc1 > doc2"""
         # compare keys
         if len(self) < len(other):
@@ -97,21 +97,19 @@ class Datastore(Generic[ID], ABC):
     def __exit__(self, *args):
         pass
 
-    def _increment_sequence_id(self):
+    def _increment_sequence_id(self) -> None:
         self._sequence_id += 1
 
-    def _set_sequence_id(self, the_id):
-        logger.info("%s: set seq_id from %d to %d"
-                    % (self.id, self.sequence_id, the_id))
+    def _set_sequence_id(self, the_id) -> None:
         assert the_id >= self._sequence_id
         self._sequence_id = the_id
 
     @property
-    def sequence_id(self):
+    def sequence_id(self) -> int:
         """Read-only sequence_id"""
         return self._sequence_id
 
-    def _pre_put(self, doc):
+    def _pre_put(self, doc) -> Document:
         # copy doc so we don't modify caller's doc
         doc = doc.copy()
 
@@ -119,26 +117,33 @@ class Datastore(Generic[ID], ABC):
             self._increment_sequence_id()
             doc[_REV] = self._sequence_id
 
-        logger.debug("datastore %s put docid %s seq %s doc %s" % (
-            self.id, doc[_ID], doc[_REV], doc
-        ))
-
         return doc
 
-    def put_if_needed(self, doc: Document) -> None:
+    def put_if_needed(self, doc: Document) -> int:
         """Put doc under docid if seq is greater
 
         Return number of records actually put (0 or 1).
+
+        As a side effect, this updates self.sequence_id if doc[_REV] is larger.
         """
         ret = 0
         docid = doc[_ID]
         # If there is no revision, treat it like rev 0
         seq = doc.get(_REV, 0)
         my_doc = self.get(docid)
+        assert my_doc is None or _REV in my_doc, 'my_doc should have _REV'
         my_seq = my_doc.get(_REV, None) if my_doc else None
-        if (my_seq is None) or (my_seq < seq) or (my_doc < doc):
+        # If my doc is older, or equal time but smaller
+        if (my_seq is None) or (my_seq < seq) or (
+                my_seq == seq and (my_doc < doc)):
+            assert my_seq is None or my_seq <= seq
             self.put(doc)
             ret = 1
+
+            # if this doc has a higher rev than our clock, move our clock up
+            # NOTE(dan): this may be optional if we handle it at the sync level
+            if seq > self.sequence_id:
+                self._set_sequence_id(seq)
         else:
             logger.debug("Ignore docid %s doc %s seq %s "
                          "(compared to doc %s seq %s)" % (
@@ -157,23 +162,15 @@ class Datastore(Generic[ID], ABC):
             self._increment_sequence_id()
             doc[_REV] = self._sequence_id
             self.put(doc)
-            logger.debug("deleted doc: %s" % doc)
 
-    def get_peer_sequence_id(self, peer: str):
+    def get_peer_sequence_id(self, peer: str) -> int:
         """Get the seq we have for peer, or zero if we have none."""
         return self.peer_seq_ids.get(peer, 0)
 
-    def set_peer_sequence_id(self, peer: str, seq: int):
+    def set_peer_sequence_id(self, peer: str, seq: int) -> None:
         """Set new peer sequence id, if seq > what we have."""
         if seq > self.get_peer_sequence_id(peer):
             self.peer_seq_ids[peer] = seq
-            action = "set"
-        else:
-            action = "ignore setting"
-
-        logger.info("%s: %s %s seq_id from %d to %d"
-                    % (self.id, action, peer,
-                       self.get_peer_sequence_id(peer), seq))
 
     @abstractmethod
     def get(self, docid: ID) -> Document:
@@ -184,60 +181,104 @@ class Datastore(Generic[ID], ABC):
         pass
 
     @abstractmethod
-    def get_docs_since(self, the_seq: int) -> Sequence[Document]:
+    def get_docs_since(self, the_seq: int, num: int) \
+            -> Tuple[int, Sequence[Document]]:
+        """Get docs put with the_seq < seq <= (the_seq+num).
+
+        This is intended to be called repeatedly to get them all, so as to
+        allow syncing in chunks.
+
+        :return current sequence id, sequence of about "num" oldest docs
+
+        The current sequence id is useful to know if we've reached the end
+        of the list of updates needed.
+
+        The oldest docs returned is about "num" docs, but may be fewer if
+        there are holes in the seq ids of the docs, or more if there are lots
+        of ties in sequence number from multiple docs that occurred
+        simultaneously.
+
+        After receiving these docs, the caller has all docs up to
+        min(the_seq+num, current sequence id).
+        """
         pass
 
     @staticmethod
-    def _pull_changes(destination, source):
+    def _pull_changes(destination, source, chunk_size=10) -> int:
         """Pull changes from source to destination.
 
         Also update destination seq id, and destination peer seq id.
 
-        Return number of docs changed on destination
+        :param destination  Where changes end up
+        :param source  Where changes come from
+        :param chunk_size Approximate chunk size to use during operation
+
+        :return: number of docs changed on destination
         """
         # destination sync: get docs from source with lowest seqs
         # since we last synced
         docs_changed = 0
         old_peer_seq_id = destination.get_peer_sequence_id(source.id)
-        for doc in source.get_docs_since(old_peer_seq_id):
-            docs_changed += destination.put_if_needed(doc)
+        new_peer_seq_id = old_peer_seq_id
+        # get docs in chunks of approximately chunk_size
+        source_seq_id = None
+        # Move forward in chunks of chunk_size, but only to source_seq_id
+        while source_seq_id is None or source_seq_id > new_peer_seq_id:
+            source_seq_id, docs = source.get_docs_since(
+                new_peer_seq_id, chunk_size)
+            for doc in docs:
+                docs_changed += destination.put_if_needed(doc)
 
-        # destination has all updates up to source.sequence_id now
-        assert source.sequence_id >= old_peer_seq_id
-        destination.set_peer_sequence_id(source.id, source.sequence_id)
+            # If we got all docs to (new_peer_seq_id+chunk_size), then either
+            # we stepped forward to that, or to the latest the source had
+            new_peer_seq_id = min(source_seq_id, new_peer_seq_id+chunk_size)
 
-        # keep destination sequence_id up to date
-        # in other words, catch up my clock to the other clock
-        # otherwise, my revs could start losing all the time
-        if destination.sequence_id < source.sequence_id:
-            destination._set_sequence_id(source.sequence_id)
+        # source_seq_id is at least as new as the docs that came over
+        assert source_seq_id >= new_peer_seq_id, (
+            'source seq %d new peer seq %d' % (
+             source.sequence_id, new_peer_seq_id))
+
+        # we moved forward, or there were no updates
+        assert (new_peer_seq_id > old_peer_seq_id
+                or source_seq_id == old_peer_seq_id)
+        assert (new_peer_seq_id > old_peer_seq_id or docs_changed == 0)
+
+        # we've got up to new_peer_seq_id, so dest must be >= that
+        destination.set_peer_sequence_id(source.id, new_peer_seq_id)
+
         return docs_changed
 
-    def push_changes(self, destination):
+    def push_changes(self, destination, chunk_size=10) -> int:
         """Push changes from self to destination.
 
         Also update destination seq id, and destination peer seq id.
 
-        Return number of docs changed on destination.
+        :param destination  Where changes end up
+        :param chunk_size  Approximate number of docs per chunk
+        :return: number of docs changed on destination.
         """
-        return Datastore._pull_changes(destination, self)
+        return Datastore._pull_changes(destination, self, chunk_size=chunk_size)
 
-    def pull_changes(self, source):
+    def pull_changes(self, source, chunk_size=10) -> int:
         """Pull changes from source to self.
 
         Also update self seq id, and self peer seq id.
 
-        Return number of docs changed (in self).
-        """
-        return Datastore._pull_changes(self, source)
+        :param source  Where changes come from
+        :param chunk_size  Approximate number of docs per chunk
 
-    def sync_both_directions(self, destination):
+        :return: number of docs changed (in self).
+        """
+        return Datastore._pull_changes(self, source, chunk_size=chunk_size)
+
+    def sync_both_directions(self, destination, chunk_size=10) -> None:
         """Sync client and server in both directions
 
         Completely updated by the end, unless destination has been changing.
 
         :param self: one datastore
         :param destination: another datastore
+        :param chunk_size: Approx. chunk_size to use for each directional sync
         :return: None
         """
         # Here is an example diagram, with source on the left, dest on the right
@@ -259,17 +300,18 @@ class Datastore(Generic[ID], ABC):
         #   dest  : 3*      source: 3*
 
         # 1. source -> destination
-        logger.info("*************** push changes from source to destination")
-        self.push_changes(destination)
+        logger.debug("************ push changes from source to destination")
+        self.push_changes(destination, chunk_size=chunk_size)
         # 2. destination -> source
-        logger.info("*************** pull changes from destination to source")
-        self.pull_changes(destination)
+        logger.debug("************ pull changes from destination to source")
+        self.pull_changes(destination, chunk_size=chunk_size)
         # 3. push source seq -> destination seq
+        logger.debug("************ push changes from source to destination 2")
         # source.set_peer_sequence_id(destination.id, destination.sequence_id)
-        final_changes = self.push_changes(destination)
+        final_changes = self.push_changes(destination, chunk_size=chunk_size)
 
         # Since nothing else changed, only the sequence # was synchronized
-        assert final_changes == 0
+        assert final_changes == 0, 'actually had %d changes' % final_changes
 
         # now their "clocks" are synchronized
         assert destination.sequence_id == self.sequence_id, (
@@ -279,18 +321,19 @@ class Datastore(Generic[ID], ABC):
         assert destination.get_peer_sequence_id(self.id) == self.sequence_id, (
             'server thinks client seq is %d, client thinks seq is %d' % (
              destination.get_peer_sequence_id(self.id), self.sequence_id))
-        assert self.get_peer_sequence_id(destination.id) == destination.sequence_id, (
+        assert (self.get_peer_sequence_id(destination.id)
+                == destination.sequence_id), (
             'client thinks server seq is %d, server thinks seq is %d' % (
              self.get_peer_sequence_id(destination.id), destination.sequence_id))
 
-        logger.info("*************** sync done, seq is %d" % self.sequence_id)
+        logger.debug("************ sync done, seq is %d" % self.sequence_id)
 
 
 class MemoryDatastore(Datastore):
     """An in-memory transient datastore, only useful for testing."""
     def __init__(self, datastore_id: str):
         super().__init__(datastore_id)
-        self.datastore = {}
+        self.datastore = OrderedDict()
 
     def get(self, docid: ID) -> Document:
         """Return doc, or None if not present."""
@@ -306,13 +349,27 @@ class MemoryDatastore(Datastore):
         If no seq, give it one.
         """
         doc = self._pre_put(doc)
-        self.datastore[doc[_ID]] = doc
+        docid = doc[_ID]
+        self.datastore[docid] = doc
+        # preserve doc key order
+        self.datastore.move_to_end(docid)
 
-    def get_docs_since(self, the_seq: int) -> Sequence[Document]:
-        """Get docs put with seq > the_seq, unordered."""
+    def get_docs_since(self, the_seq: int, num: int) \
+            -> Tuple[int, Sequence[Document]]:
+        """Get docs put with the_seq < seq <= (the_seq+num).
+
+        This is intended to be called repeatedly to get them all, so as to
+        allow syncing in chunks.
+        """
+        docs = []
         for docid, doc in self.datastore.items():
-            if doc[_REV] > the_seq:
-                yield doc
+            if the_seq < doc[_REV] <= (the_seq + num):
+                docs.append(doc)
+            # Since self.datastore is ordered, we can cut out early
+            # This is optional, perhaps premature optimization
+            if doc[_REV] > (the_seq + num):
+                break
+        return self.sequence_id, docs
 
 
 class PostgresDatastore(Datastore):
@@ -372,7 +429,7 @@ class PostgresDatastore(Datastore):
         if self.conn:
             self.conn.close()
 
-    def _row_to_doc(self, docrow):
+    def _row_to_doc(self, docrow) -> Document:
         the_dict = {}
         assert len(docrow) == len(self.columnnames)
         for idx in range(len(docrow)):
@@ -382,8 +439,8 @@ class PostgresDatastore(Datastore):
             del the_dict[_DELETED]
         return Document(the_dict)
 
-    def _set_sequence_id(self, the_id):
-        # Get this to work:
+    def _set_sequence_id(self, the_id) -> None:
+        # TODO(dan): get this to work with a tuple:
         # self.cursor.execute(
         #     "UPDATE data_sync_revisions set sequence_id = %s"
         #     " RETURNING sequence_id", the_id)
@@ -429,14 +486,20 @@ class PostgresDatastore(Datastore):
             upsert_statement,
             tuple([doc.get(key, None) for key in self.columnnames]))
 
-    def get_docs_since(self, the_seq: int) -> Sequence[Document]:
-        """Get docs put with seq > the_seq, unordered."""
-        self.cursor.execute(
-            "SELECT * FROM %s WHERE _rev > %%s" % self.tablename, (the_seq,))
-        for docrow in self.cursor.fetchall():
-            yield self._row_to_doc(docrow)
+    def get_docs_since(self, the_seq: int, num: int) \
+            -> Tuple[int, Sequence[Document]]:
+        """Get docs put with the_seq < seq <= (the_seq+num).
 
-    def _increment_sequence_id(self):
+        This is intended to be called repeatedly to get them all, so as to
+        allow syncing in chunks.
+        """
+        self.cursor.execute(
+            "SELECT * FROM %s WHERE %%s < _rev AND _rev <= %%s"
+            % self.tablename, (the_seq, the_seq + num))
+        docs = [self._row_to_doc(docrow) for docrow in self.cursor.fetchall()]
+        return self.sequence_id, docs
+
+    def _increment_sequence_id(self) -> None:
         self.cursor.execute(
             "UPDATE data_sync_revisions set sequence_id = sequence_id+1"
             " WHERE datastore_id=%s"

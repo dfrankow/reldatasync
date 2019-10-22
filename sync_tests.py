@@ -3,7 +3,7 @@ import psycopg2
 import unittest
 import random
 
-from datastore import MemoryDatastore, PostgresDatastore, Document
+from datastore import MemoryDatastore, PostgresDatastore, Document, _ID, _REV
 
 logger = logging.getLogger(__name__)
 
@@ -17,29 +17,40 @@ class _TestDatastore(unittest.TestCase):
         self.server = None
         self.client = None
 
-    def test_sync1(self):
+    def test_nonoverlapping(self):
         """Non-overlapping documents from datastore"""
         # server makes object A v1
-        self.server.put(Document({'_id': 'A', 'value': 'val1'}))
+        self.server.put(Document({_ID: 'A', 'value': 'val1'}))
         # client makes object B v1
-        self.client.put(Document({'_id': 'B', 'value': 'val2'}))
+        self.client.put(Document({_ID: 'B', 'value': 'val2'}))
 
         # sync leaves both server and client with A val1, B val2
         self.client.sync_both_directions(self.server)
 
-        self.assertEqual(Document({'_id': 'A', 'value': 'val1', '_rev': 1}),
+        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
                          self.client.get('A'))
-        self.assertEqual(Document({'_id': 'B', 'value': 'val2', '_rev': 1}),
+        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
                          self.client.get('B'))
 
-        self.assertEqual(Document({'_id': 'A', 'value': 'val1', '_rev': 1}),
+        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
                          self.server.get('A'))
-        self.assertEqual(Document({'_id': 'B', 'value': 'val2', '_rev': 1}),
+        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
                          self.server.get('B'))
+
+        # counter is at the highest existing doc version
+        server_seq, server_docs = self.server.get_docs_since(0, 1000)
+        self.assertEqual(self.server.sequence_id, server_seq)
+        self.assertEqual(self.server.sequence_id,
+                         max(doc[_REV] for doc in server_docs))
+
+        client_seq, client_docs = self.client.get_docs_since(0, 1000)
+        self.assertEqual(self.client.sequence_id, client_seq)
+        self.assertEqual(self.client.sequence_id,
+                         max(doc[_REV] for doc in client_docs))
 
     def test_put_if_needed(self):
         """put_if_needed doesn't put a second time"""
-        doc = Document({'_id': 'A', 'value': 'val1'})
+        doc = Document({_ID: 'A', 'value': 'val1'})
         # put the doc
         self.assertEqual(1, self.server.put_if_needed(doc))
         # doc is already present
@@ -48,32 +59,32 @@ class _TestDatastore(unittest.TestCase):
     def test_overlapping_sync(self):
         """Overlapping documents from datastore"""
         # server makes object A v1
-        self.server.put(Document({'_id': 'A', 'value': 'val1'}))
-        self.server.put(Document({'_id': 'C', 'value': 'val3'}))
+        self.server.put(Document({_ID: 'A', 'value': 'val1'}))
+        self.server.put(Document({_ID: 'C', 'value': 'val3'}))
         # client makes object B v1
-        self.client.put(Document({'_id': 'B', 'value': 'val2'}))
-        self.client.put(Document({'_id': 'C', 'value': 'val4'}))
+        self.client.put(Document({_ID: 'B', 'value': 'val2'}))
+        self.client.put(Document({_ID: 'C', 'value': 'val4'}))
 
         # sync leaves both server and client with A val1,  B val2, C val4
         self.client.sync_both_directions(self.server)
 
-        self.assertEqual(Document({'_id': 'A', 'value': 'val1', '_rev': 1}),
+        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
                          self.client.get('A'))
-        self.assertEqual(Document({'_id': 'B', 'value': 'val2', '_rev': 1}),
+        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
                          self.client.get('B'))
-        self.assertEqual(Document({'_id': 'C', 'value': 'val4', '_rev': 2}),
+        self.assertEqual(Document({_ID: 'C', 'value': 'val4', _REV: 2}),
                          self.client.get('C'))
 
-        self.assertEqual(Document({'_id': 'A', 'value': 'val1', '_rev': 1}),
+        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
                          self.server.get('A'))
-        self.assertEqual(Document({'_id': 'B', 'value': 'val2', '_rev': 1}),
+        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
                          self.server.get('B'))
-        self.assertEqual(Document({'_id': 'C', 'value': 'val4', '_rev': 2}),
+        self.assertEqual(Document({_ID: 'C', 'value': 'val4', _REV: 2}),
                          self.server.get('C'))
 
     @staticmethod
     def _some_datastore_mods(datastore, items):
-        num_steps = random.randint(2, 20)
+        num_steps = random.randint(2, 30)
         for idx in range(num_steps):
             # pick item
             item = random.choice(items)
@@ -81,28 +92,28 @@ class _TestDatastore(unittest.TestCase):
                 datastore.delete(item)
             else:
                 val = random.randint(0, 1000)
-                datastore.put(Document({'_id': item, 'value': val}))
+                datastore.put(Document({_ID: item, 'value': val}))
 
     def test_long_streaks(self):
         items = ['a', 'b', 'c', 'd', 'e']
 
-        for jdx in range(3):
+        for jdx in range(4):
             # some mods for server, then client
             _TestDatastore._some_datastore_mods(self.server, items)
             _TestDatastore._some_datastore_mods(self.client, items)
 
             # sync
-            self.client.sync_both_directions(self.server)
+            # use small chunk size to test multiple chunks
+            self.client.sync_both_directions(self.server, chunk_size=2)
 
             # server and client should now contain the same stuff
-            docs_c = [doc for doc in self.client.get_docs_since(0)]
-            docs_s = [doc for doc in self.server.get_docs_since(0)]
+            _, docs_c = self.client.get_docs_since(0, 1000)
+            _, docs_s = self.server.get_docs_since(0, 1000)
 
             self.assertEqual(sorted(docs_c), sorted(docs_s))
-        # self.fail("TEST")
 
     def test_copy(self):
-        doc = Document({'_id': 'A', 'value': 'val1'})
+        doc = Document({_ID: 'A', 'value': 'val1'})
         self.server.put(doc)
         doc['another'] = 'foo'
         doc2 = self.server.get('A')
@@ -110,7 +121,7 @@ class _TestDatastore(unittest.TestCase):
         self.assertTrue('another' in doc)
 
     def test_delete(self):
-        doc = Document({'_id': 'A', 'value': 'val1'})
+        doc = Document({_ID: 'A', 'value': 'val1'})
         self.server.put(doc)
         doc1 = self.server.get('A')
         self.assertTrue(self.server.get('A'))
@@ -119,7 +130,7 @@ class _TestDatastore(unittest.TestCase):
         import logging
         logging.info("doc2 %s" % doc2)
         self.assertEqual(True, doc2['_deleted'])
-        self.assertGreater(doc2['_rev'], doc1['_rev'])
+        self.assertGreater(doc2[_REV], doc1[_REV])
 
 
 class TestMemoryDatastore(_TestDatastore):
@@ -268,15 +279,15 @@ class TestPostgresDatastore(_TestDatastore):
 
 class TestDocument(unittest.TestCase):
     def test_compare(self):
-        doc = Document({'_id': 'A', 'value': 'val1'})
+        doc = Document({_ID: 'A', 'value': 'val1'})
         self.assertEqual(doc, doc)
-        doc2 = Document({'_id': 'A', 'value': 'val2'})
+        doc2 = Document({_ID: 'A', 'value': 'val2'})
         self.assertGreater(doc2, doc)
         self.assertLess(doc, doc2)
 
     def test_none(self):
-        doc1 = Document({'_id': 'A', 'value': 'val1'})
-        doc2 = Document({'_id': 'A', 'value': None})
+        doc1 = Document({_ID: 'A', 'value': 'val1'})
+        doc2 = Document({_ID: 'A', 'value': None})
         # equality with None
         self.assertEqual(doc2, doc2)
         # inequality with None
