@@ -440,13 +440,9 @@ class PostgresDatastore(Datastore):
         return Document(the_dict)
 
     def _set_sequence_id(self, the_id) -> None:
-        # TODO(dan): get this to work with a tuple:
-        # self.cursor.execute(
-        #     "UPDATE data_sync_revisions set sequence_id = %s"
-        #     " RETURNING sequence_id", the_id)
         self.cursor.execute(
             "UPDATE data_sync_revisions set sequence_id = %s"
-            " RETURNING sequence_id" % the_id)
+            " RETURNING sequence_id", (the_id,))
         new_val = self.cursor.fetchone()[0]
         super()._set_sequence_id(the_id)
         assert self._sequence_id == new_val, (
@@ -456,7 +452,7 @@ class PostgresDatastore(Datastore):
         """Return doc, or None if not present."""
         doc = None
         self.cursor.execute(
-            "SELECT * FROM %s WHERE _id=%%s" % self.tablename, docid)
+            "SELECT * FROM %s WHERE _id=%%s" % self.tablename, (docid,))
         docrow = self.cursor.fetchone()
         if docrow:
             doc = self._row_to_doc(docrow)
