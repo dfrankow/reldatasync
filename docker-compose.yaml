@@ -24,7 +24,7 @@ services:
       - PYTHONPATH=.
     volumes:
       # mount current directory so that changes in files are reflected
-      # in the running envirinment
+      # in the running environment
       - .:/app
 
 volumes:
