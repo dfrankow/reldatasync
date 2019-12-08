@@ -1,89 +1,64 @@
 #!/usr/bin/env python3
 
-"""A simple HTTP server with REST and json for python 3.
+from flask import Flask, request
+# from datastore import PostgresDatastore
+from .datastore import MemoryDatastore
 
-addrecord takes utf8-encoded URL parameters
-getrecord returns utf8-encoded json.
-"""
-
-from http.server import BaseHTTPRequestHandler, HTTPServer
-import argparse
-import re
-import cgi
-import json
-import threading
-from socketserver import ThreadingMixIn
-from urllib import parse
+app = Flask(__name__)
 
 
-class LocalData(object):
-    records = {}
+datastores = {}
 
 
-class HTTPRequestHandler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        if re.search('/api/v1/addrecord/*', self.path):
-            ctype, pdict = cgi.parse_header(
-                self.headers.get('content-type'))
-            if ctype == 'application/json':
-                length = int(self.headers.get('content-length'))
-                rfile_str = self.rfile.read(length).decode('utf8')
-                data = parse.parse_qs(rfile_str, keep_blank_values=1)
-                record_id = self.path.split('/')[-1]
-                LocalData.records[record_id] = data
-                print("addrecord %s: %s" % (record_id, data))
-                # HTTP 200: ok
-                self.send_response(200)
-            else:
-                # HTTP 400: bad request
-                self.send_response(400, "Bad Request: must give data")
-        else:
-            # HTTP 403: forbidden
-            self.send_response(403)
-
-        self.end_headers()
-
-    def do_GET(self):
-        if re.search('/api/v1/shutdown', self.path):
-            # Must shutdown in another thread or we'll hang
-            def kill_me_please():
-                self.server.shutdown()
-            threading.Thread(target=kill_me_please).start()
-
-            # Send out a 200 before we go
-            self.send_response(200)
-        elif re.search('/api/v1/getrecord/*', self.path):
-            record_id = self.path.split('/')[-1]
-            if record_id in LocalData.records:
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                # Return json, even though it came in as POST URL params
-                data = json.dumps(LocalData.records[record_id])
-                print("getrecord %s: %s" % (record_id, data))
-                self.wfile.write(data.encode('utf8'))
-            else:
-                self.send_response(404, 'Not Found: record does not exist')
-        else:
-            self.send_response(403)
-
-        self.end_headers()
+@app.route('/')
+def hello():
+    return 'Hello'
 
 
-class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
-    pass
+# def _connstr():
+#     return ' '.join([
+#         "host=%s" % os.getenv('POSTGRES_HOST', 'db'),
+#         "user=%s" % os.getenv('POSTGRES_USER', 'postgres'),
+#         "dbname=%s" % os.getenv('POSTGRES_DB', 'test')])
 
 
-def main():
-    parser = argparse.ArgumentParser(description='HTTP Server')
-    parser.add_argument('port', type=int, help='Listening port for HTTP Server')
-    parser.add_argument('ip', help='HTTP Server IP')
-    args = parser.parse_args()
-
-    server = ThreadingSimpleServer((args.ip, args.port), HTTPRequestHandler)
-    print('HTTP Server Running...........')
-    server.serve_forever()
+def _get_datastore(table):
+    if table not in datastores:
+        # datastores[table] = PostgresDatastore('datastore', _connstr(), table)
+        datastores[table] = MemoryDatastore('datastore')
+    return datastores[table]
 
 
-if __name__ == '__main__':
-    main()
+@app.route('/<table>', methods=['GET'])
+def table_func(table):
+    if request.method == 'GET':
+        return table in datastores
+
+
+@app.route('/<table>/sequence_id/<source>', methods=['GET'],
+           defaults={'sequence_id': None})
+@app.route('/<table>/sequence_id/<source>/<sequence_id>', methods=['POST'])
+def sequence_id_func(table, source, sequence_id:int):
+    datastore = _get_datastore(table)
+    if request.method == 'GET':
+        return {'sequence_id': datastore.get_peer_sequence_id(source)}
+    elif request.method == 'POST':
+        datastore.set_peer_sequence_id(source, sequence_id)
+        return 'ok'
+
+
+@app.route('/<table>/docs', methods=['GET', 'POST'])
+def docs(table):
+    datastore = _get_datastore(table)
+    if request.method == 'GET':
+        # return docs
+        cur_seq_id, docs = datastore.get_docs_since(
+            request.args.get('start_sequence_id', 1),
+            request.args.get('chunk_size', 10))
+        return {'current_sequence_id': cur_seq_id, 'documents': docs}
+    elif request.meothd == 'POST':
+        # put docs
+        num_put = 0
+        for doc in request.json:
+            num_put += datastore.put_if_needed(doc)
+        return {'num_docs_put': num_put}

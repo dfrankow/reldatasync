@@ -41,6 +41,12 @@ To see the postgres DB:
 $ docker-compose run db psql -h db -U postgres
 ```
 
+To run the test server:
+
+```
+$ docker-compose run --service-ports data_sync env FLASK_APP=test_server.py flask run
+```
+
 Related efforts
 ---------------
 
