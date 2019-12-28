@@ -12,7 +12,7 @@ datastores = {}
 
 @app.route('/')
 def hello():
-    return 'Hello'
+    return {'datastores': [key for key in datastores.keys()]}
 
 
 # def _connstr():
@@ -22,11 +22,11 @@ def hello():
 #         "dbname=%s" % os.getenv('POSTGRES_DB', 'test')])
 
 
-def _get_datastore(table):
-    if table not in datastores:
+def _get_datastore(table, autocreate=True):
+    if table not in datastores and autocreate:
         # datastores[table] = PostgresDatastore('datastore', _connstr(), table)
         datastores[table] = MemoryDatastore('datastore')
-    return datastores[table]
+    return datastores.get(table, None)
 
 
 @app.route('/<table>', methods=['GET', 'POST'])
@@ -49,7 +49,9 @@ def table_func(table):
            defaults={'sequence_id': None})
 @app.route('/<table>/sequence_id/<source>/<sequence_id>', methods=['POST'])
 def sequence_id_func(table, source, sequence_id:int):
-    datastore = _get_datastore(table)
+    datastore = _get_datastore(table, autocreate=False)
+    if not datastore:
+        abort(404)
     if request.method == 'GET':
         return {'sequence_id': datastore.get_peer_sequence_id(source)}
     elif request.method == 'POST':
@@ -59,7 +61,9 @@ def sequence_id_func(table, source, sequence_id:int):
 
 @app.route('/<table>/docs', methods=['GET', 'POST'])
 def docs(table):
-    datastore = _get_datastore(table)
+    datastore = _get_datastore(table, autocreate=False)
+    if not datastore:
+        abort(404)
     if request.method == 'GET':
         # return docs
         cur_seq_id, docs = datastore.get_docs_since(
