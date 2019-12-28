@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from flask import Flask, request
+from flask import Flask, request, abort, Response
 # from datastore import PostgresDatastore
 from .datastore import MemoryDatastore
 
@@ -29,10 +29,20 @@ def _get_datastore(table):
     return datastores[table]
 
 
-@app.route('/<table>', methods=['GET'])
+@app.route('/<table>', methods=['GET', 'POST'])
 def table_func(table):
-    if request.method == 'GET':
-        return table in datastores
+    if request.method == 'POST':
+        # Create table
+        # If it already exists, that's okay
+        _ = _get_datastore(table)
+        # TODO(dan): Return Location header of new resource
+        # See also https://restfulapi.net/http-methods/#post
+        return Response("", status=201)
+    elif request.method == 'GET':
+        if table not in datastores:
+            abort(404)
+
+    return ""
 
 
 @app.route('/<table>/sequence_id/<source>', methods=['GET'],
@@ -53,10 +63,10 @@ def docs(table):
     if request.method == 'GET':
         # return docs
         cur_seq_id, docs = datastore.get_docs_since(
-            request.args.get('start_sequence_id', 1),
+            request.args.get('start_sequence_id', 0),
             request.args.get('chunk_size', 10))
         return {'current_sequence_id': cur_seq_id, 'documents': docs}
-    elif request.meothd == 'POST':
+    elif request.method == 'POST':
         # put docs
         num_put = 0
         for doc in request.json:
