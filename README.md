@@ -44,8 +44,12 @@ $ docker-compose run db psql -h db -U postgres
 To run the test server:
 
 ```
-$ docker-compose run --service-ports data_sync env FLASK_APP=test_server.py flask run
+$ docker-compose run --service-ports data_sync env \
+    FLASK_APP=test_server.py flask run -h 0.0.0.0
 ```
+
+It listens to host `0.0.0.0` to get localhost messages from outside
+the Docker container.
 
 Related efforts
 ---------------
