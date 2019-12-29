@@ -364,6 +364,8 @@ class MemoryDatastore(Datastore):
 
         This is intended to be called repeatedly to get them all, so as to
         allow syncing in chunks.
+
+        :return  current sequence id, docs
         """
         docs = []
         for docid, doc in self.datastore.items():

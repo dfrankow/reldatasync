@@ -66,13 +66,32 @@ def docs(table):
         abort(404)
     if request.method == 'GET':
         # return docs
-        cur_seq_id, docs = datastore.get_docs_since(
-            request.args.get('start_sequence_id', 0),
-            request.args.get('chunk_size', 10))
-        return {'current_sequence_id': cur_seq_id, 'documents': docs}
+        cur_seq_id, the_docs = datastore.get_docs_since(
+            int(request.args.get('start_sequence_id', 0)),
+            int(request.args.get('chunk_size', 10)))
+        return {'current_sequence_id': cur_seq_id, 'documents': the_docs}
     elif request.method == 'POST':
         # put docs
         num_put = 0
-        for doc in request.json:
-            num_put += datastore.put_if_needed(doc)
+        for the_doc in request.json:
+            num_put += datastore.put_if_needed(the_doc)
         return {'num_docs_put': num_put}
+
+
+@app.route('/<table>/doc/<docid>', methods=['GET'])
+@app.route('/<table>/doc', methods=['POST'],
+           defaults={'docid': None})
+def doc(table, docid):
+    datastore = _get_datastore(table, autocreate=False)
+    if not datastore:
+        abort(404)
+    if request.method == 'GET':
+        ret = datastore.get(docid)
+        if not ret:
+            abort(404)
+        return ret
+    elif request.method == 'POST':
+        datastore.put(request.json)
+        print(f"put {request.json}")
+        # Return something else?
+        return "ok"
