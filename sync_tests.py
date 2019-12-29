@@ -298,3 +298,7 @@ class TestDocument(unittest.TestCase):
         # inequality with None
         self.assertGreater(doc1, doc2)
         self.assertLess(doc2, doc1)
+
+        # inequality with None doc
+        self.assertLess(None, doc1)
+        self.assertLess(None, doc2)
