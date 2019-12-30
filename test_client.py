@@ -122,12 +122,11 @@ def main():
     remote_ds = RestClientSourceDatastore(BASE_URL, 'table1')
     ds.sync_both_directions(remote_ds)
 
-    # TODO: Check that table1 and table2 have the same things
+    # Check that table1 and table2 have the same things
     local_seq, local_docs = ds.get_docs_since(0, 10)
     remote_seq, remote_docs = remote_ds.get_docs_since(0, 10)
     assert local_seq == remote_seq
     assert len(local_docs) == len(remote_docs)
-
     for local_doc in local_docs:
         assert local_doc in remote_docs
     for remote_doc in remote_docs:
