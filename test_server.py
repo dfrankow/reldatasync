@@ -92,6 +92,5 @@ def doc(table, docid):
         return ret
     elif request.method == 'POST':
         datastore.put(request.json)
-        print(f"put {request.json}")
         # Return something else?
         return "ok"
