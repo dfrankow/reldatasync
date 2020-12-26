@@ -18,20 +18,26 @@ sync_both() and no transactional protection.
 Tests
 -----
 
-To run tests:
+To run tests in the development environment:
+
+```
+$ docker-compose run --rm data_sync python setup.py test
+```
+
+or directly:
 
 ```
 $ docker-compose up
-$ docker-compose run data_sync nosetests sync_tests
+$ docker-compose run data_sync nosetests tests/sync_tests.py
 ```
 
-You shouldn't have to give the "sync_tests", but
+You shouldn't have to give the "sync_tests.py", but
 nosetests gets confused about the path.
 
-To run tests and show logging from the `sync_tests` logger:
+To run tests and show logging from the `sync_tests` logger (BROKEN):
 
 ```
-$ docker-compose run data_sync nosetests --debug=sync_tests sync_tests
+$ docker-compose run data_sync nosetests --debug=tests.sync_tests tests/sync_tests.py
 ```
 
 See also [stackoverflow](https://stackoverflow.com/questions/32565562/make-nose-test-runner-show-logging-even-if-tests-pass).
@@ -48,7 +54,7 @@ Test client and server
 To run a test that starts the server and applies test_client.py:
 
 ```
-$ docker-compose run --rm data_sync /app/test_server_and_client.py 
+$ docker-compose run --rm data_sync /app/tests/test_server_and_client.py 
 ```
 
 
@@ -56,7 +62,7 @@ To run the test server by itself (accessible on 0.0.0.0):
 
 ```
 $ docker-compose run --service-ports data_sync env \
-    FLASK_APP=test_server.py flask run -h 0.0.0.0
+    FLASK_APP=tests/test_server.py flask run -h 0.0.0.0
 ```
 
 It listens to host `0.0.0.0` to get localhost messages from outside
@@ -65,10 +71,18 @@ the Docker container.
 To run the test client (that connects to test_server.py):
 
 ```
-$ docker-compose run data_sync ./test_client.py
+$ docker-compose run data_sync tests/test_client.py -s 172.22.0.3:5000
 ```
 
 It will work only once, because it requires an empty DB on the server.
+
+I get the IP address by looking in the docker network:
+
+```
+$ docker network inspect data_sync_default
+```
+
+There must be a better way than grabbing the IP of the server.
 
 
 Related efforts

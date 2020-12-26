@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 from flask import Flask, request, abort, Response
-# from datastore import PostgresDatastore
-from datastore import MemoryDatastore
+# from reldatasync.datastore import PostgresDatastore
+from reldatasync.datastore import MemoryDatastore
 
 import logging
 

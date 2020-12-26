@@ -3,10 +3,10 @@ import psycopg2
 import unittest
 import random
 
-from datastore import MemoryDatastore, PostgresDatastore, Document, _ID, _REV
+from reldatasync.datastore import (
+    MemoryDatastore, PostgresDatastore, Document, _ID, _REV)
 
 logger = logging.getLogger(__name__)
-
 
 # nosetests ignores tests starting with underscore
 # See also https://stackoverflow.com/a/50380006/34935

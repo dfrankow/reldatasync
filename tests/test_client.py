@@ -4,7 +4,7 @@ import argparse
 import requests
 from typing import Sequence, Tuple, Dict
 
-from datastore import Datastore, MemoryDatastore, ID, Document
+from reldatasync.datastore import Datastore, MemoryDatastore, ID, Document
 
 
 class RestClientSourceDatastore(Datastore):
@@ -47,6 +47,7 @@ class RestClientSourceDatastore(Datastore):
 def main():
     parser = argparse.ArgumentParser(description='Test REST server.')
     parser.add_argument('--server-url', '-s', dest='server_url',
+                        required=True,
                         help='URL of the server')
     args = parser.parse_args()
     base_url = "http://" + args.server_url
