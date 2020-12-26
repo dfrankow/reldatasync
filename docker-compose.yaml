@@ -24,8 +24,12 @@ services:
       - PYTHONPATH=.
     volumes:
       # mount current directory so that changes in files are reflected
-      # in the running envirinment
+      # in the running environment
       - .:/app
+    # Open up 5000, hopefully not in conflict with any other you may be running
+    ports:
+      - "5000:5000"
+
 
 volumes:
   postgres_data_sync:

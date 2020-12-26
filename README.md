@@ -21,6 +21,7 @@ Tests
 To run tests:
 
 ```
+$ docker-compose up
 $ docker-compose run data_sync nosetests sync_tests
 ```
 
@@ -40,6 +41,35 @@ To see the postgres DB:
 ```
 $ docker-compose run db psql -h db -U postgres
 ```
+
+Test client and server
+----------------------
+
+To run a test that starts the server and applies test_client.py:
+
+```
+$ docker-compose run --rm data_sync /app/test_server_and_client.py 
+```
+
+
+To run the test server by itself (accessible on 0.0.0.0):
+
+```
+$ docker-compose run --service-ports data_sync env \
+    FLASK_APP=test_server.py flask run -h 0.0.0.0
+```
+
+It listens to host `0.0.0.0` to get localhost messages from outside
+the Docker container.
+
+To run the test client (that connects to test_server.py):
+
+```
+$ docker-compose run data_sync ./test_client.py
+```
+
+It will work only once, because it requires an empty DB on the server.
+
 
 Related efforts
 ---------------
@@ -65,3 +95,7 @@ compatible with CouchDB.
 [Cloud Firestore](https://firebase.google.com/products/firestore/) is a
 product that handles synchronization including an offline mode.  However,
 it is a NoSQL data store.
+
+[AMPLI-SYNC](https://github.com/sqlite-sync/SQLite-sync.com) looks very
+close to what I want, but it requires Tomcat (a Java server), and I want
+to use Django.

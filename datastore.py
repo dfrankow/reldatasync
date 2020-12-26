@@ -38,12 +38,12 @@ class Document(dict):
             return 0
 
     def _compare(self, other) -> int:
-        """Return -1 if doc1 < doc2, 0 if equal, 1 if doc1 > doc2"""
+        """Return -1 if self < other, 0 if equal, 1 if self > other or other is None."""
         # compare keys
-        if len(self) < len(other):
-            return -1
-        elif len(self) > len(other):
+        if other is None or len(self) > len(other):
             return 1
+        elif len(self) < len(other):
+            return -1
         else:
             # same number of keys, now compare them
             keys1 = sorted(self.keys())
@@ -229,6 +229,10 @@ class Datastore(Generic[ID], ABC):
             for doc in docs:
                 docs_changed += destination.put_if_needed(doc)
 
+            # destination seq_id is at least as big as the docs we put in
+            assert (len(docs) == 0 or
+                    destination.sequence_id >= max([doc['_rev'] for doc in docs]))
+
             # If we got all docs to (new_peer_seq_id+chunk_size), then either
             # we stepped forward to that, or to the latest the source had
             new_peer_seq_id = min(source_seq_id, new_peer_seq_id+chunk_size)
@@ -360,6 +364,8 @@ class MemoryDatastore(Datastore):
 
         This is intended to be called repeatedly to get them all, so as to
         allow syncing in chunks.
+
+        :return  current sequence id, docs
         """
         docs = []
         for docid, doc in self.datastore.items():

@@ -1,6 +1,6 @@
-FROM python:3.7.4
+FROM python:3.8.6
 
 COPY . /app
 WORKDIR "/app"
 
-RUN python3.7 -m pip install -r requirements.dev.txt
+RUN python3 -m pip install -r requirements.dev.txt
