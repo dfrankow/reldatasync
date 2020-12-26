@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import requests
 from typing import Sequence, Tuple, Dict
 
@@ -43,14 +44,15 @@ class RestClientSourceDatastore(Datastore):
         return self.baseurl + url
 
 
-BASE_URL = 'http://172.22.0.3:5000/'
-
-
-def server_url(url):
-    return BASE_URL + url
-
-
 def main():
+    parser = argparse.ArgumentParser(description='Test REST server.')
+    parser.add_argument('--server-url', '-s', dest='server_url',
+                        help='URL of the server')
+    args = parser.parse_args()
+    base_url = "http://" + args.server_url
+    # server_url is a function that returns base + rest
+    server_url = lambda url: base_url + url
+
     # Create table1
     resp = requests.post(server_url('table1'))
     assert resp.status_code == 201
@@ -119,7 +121,7 @@ def main():
         ds.put(Document(doc))
 
     # Sync local datastore with remote table1
-    remote_ds = RestClientSourceDatastore(BASE_URL, 'table1')
+    remote_ds = RestClientSourceDatastore(base_url, 'table1')
     ds.sync_both_directions(remote_ds)
 
     # Check that table1 and table2 have the same things
