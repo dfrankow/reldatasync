@@ -21,6 +21,7 @@ Tests
 To run tests:
 
 ```
+$ docker-compose up
 $ docker-compose run data_sync nosetests sync_tests
 ```
 
