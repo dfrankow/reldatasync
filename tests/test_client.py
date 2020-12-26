@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import logging
 import requests
 from typing import Sequence, Tuple, Dict
 
@@ -136,6 +135,5 @@ def main():
     for remote_doc in remote_docs:
         assert remote_doc in local_docs
 
-    logging.info("Test passed")
 
 main()
