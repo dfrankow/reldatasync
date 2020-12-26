@@ -52,6 +52,15 @@ $ docker-compose run --service-ports data_sync env \
 It listens to host `0.0.0.0` to get localhost messages from outside
 the Docker container.
 
+Ro run the test client:
+
+```
+$ docker-compose run data_sync ./test_client.py
+```
+
+It will work once, because it requires an empty DB on the server.
+
+
 Related efforts
 ---------------
 
