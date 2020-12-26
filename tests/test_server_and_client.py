@@ -6,11 +6,11 @@ import time
 
 def main():
     # start server (async)
-    server_process = Popen(["./test_server.py"])
+    server_process = Popen(["tests/test_server.py"])
 
     # run client and check return value is 0
     time.sleep(1)
-    client_process = run(["./test_client.py", "-s", "127.0.0.1:5000/"])
+    client_process = run(["tests/test_client.py", "-s", "127.0.0.1:5000/"])
     assert client_process.returncode == 0, (
         f"Non-zero return code: {client_process.returncode}")
     print(f"client return code is {client_process.returncode} (ok)")
