@@ -21,7 +21,7 @@ Tests
 To run tests in the development environment:
 
 ```
-$ docker-compose run data_sync python setup.py test
+$ docker-compose run --rm data_sync python setup.py test
 ```
 
 or directly:
