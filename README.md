@@ -4,7 +4,8 @@ Introduction
 NOTE: This is unreleased software.  It's not done.
 
 This is intended to be a simple implementation of synchronizing data
-between two data sources with a "last write wins" policy.
+between two relational data sources (i.e., tables with columns),
+with a "last write wins" policy.
 
 I give no guarantee of correctness!  However, if it is correct, then
 the result should be eventually consistent if peers synchronize with
