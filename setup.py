@@ -24,7 +24,7 @@ setuptools.setup(
     install_requires=read_requirements(),
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/dfrankow/data_sync",
+    url="https://github.com/dfrankow/reldatasync",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -32,6 +32,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.8',
-    test_suite='nose.collector',
-    tests_require=['nose'],
+    test_suite='tests',
 )

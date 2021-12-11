@@ -1,16 +1,23 @@
+import argparse
 import logging
+import os
+import random
+
 import psycopg2
 import unittest
-import random
 
 from reldatasync.datastore import (
     MemoryDatastore, PostgresDatastore, Document, _ID, _REV)
 
 logger = logging.getLogger(__name__)
 
-# nosetests ignores tests starting with underscore
-# See also https://stackoverflow.com/a/50380006/34935
-class _TestDatastore(unittest.TestCase):
+# Get log level from environment so we can set it for python -m unittest
+logging.basicConfig(level=os.getenv('LOG_LEVEL', 'WARNING'))
+
+
+# Tests starting with underscore are ignored
+# See also https://stackoverflow.com/a/50380006
+class _TestDatastore:
     """Base class for testing datastores."""
 
     def setUp(self):
@@ -133,7 +140,7 @@ class _TestDatastore(unittest.TestCase):
         self.assertGreater(doc2[_REV], doc1[_REV])
 
 
-class TestMemoryDatastore(_TestDatastore):
+class TestMemoryDatastore(_TestDatastore, unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.server = MemoryDatastore('server')
@@ -141,8 +148,14 @@ class TestMemoryDatastore(_TestDatastore):
 
 
 def _dbconnstr(dbname=None):
-    """Connect to test database on host db, user postgres."""
-    the_str = "host=db user=postgres"
+    """Connect to test database on host db, user postgres by default.
+
+    You can change host and server with environment variables POSTGRES_HOST
+    and POSTGRES_SERVER.
+    """
+    host = os.getenv('POSTGRES_HOST', 'db')
+    user = os.getenv('POSTGRES_USER', 'postgres')
+    the_str = f"host={host} user={user}"
     if dbname:
         the_str += ' dbname=%s' % dbname
     return the_str
@@ -155,13 +168,20 @@ def exec_sql(exec_func, dbname=None, autocommit=True):
     Otherwise we'd just keep a cursor around instead.
     """
     connstr = _dbconnstr(dbname)
-    with psycopg2.connect(connstr) as conn:
+    conn = None
+    # NOTE: This particular style of executing a command is to allow
+    # creating a database with later versions of psycopg2.
+    # See https://stackoverflow.com/a/68112827
+    try:
+        conn = psycopg2.connect(connstr)
         if autocommit:
-            # Autocommit to be able to create a database
             conn.set_isolation_level(
                 psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
         with conn.cursor() as cursor:
             exec_func(cursor)
+    finally:
+        if conn:
+            conn.close()
 
 
 def _create_test_db(dbname):
@@ -248,7 +268,7 @@ def _drop_databases(cls, same_db):
         _drop_db(cls.client_dbname)
 
 
-class TestPostgresDatastore(_TestDatastore):
+class TestPostgresDatastore(_TestDatastore, unittest.TestCase):
     client_connstr = None
     server_connstr = None
     # SAME_DB: if True, put two tables in one DB; else put one table in two DBs.

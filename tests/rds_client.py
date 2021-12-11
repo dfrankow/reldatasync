@@ -136,4 +136,5 @@ def main():
         assert remote_doc in local_docs
 
 
-main()
+if __name__ == '__main__':
+    main()
