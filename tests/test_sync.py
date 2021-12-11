@@ -1,14 +1,18 @@
+import argparse
 import logging
 import os
+import random
 
 import psycopg2
 import unittest
-import random
 
 from reldatasync.datastore import (
     MemoryDatastore, PostgresDatastore, Document, _ID, _REV)
 
 logger = logging.getLogger(__name__)
+
+# Get log level from environment so we can set it for python -m unittest
+logging.basicConfig(level=os.getenv('LOG_LEVEL', 'WARNING'))
 
 
 # Tests starting with underscore are ignored
@@ -318,7 +322,3 @@ class TestDocument(unittest.TestCase):
         # inequality with None doc
         self.assertLess(None, doc1)
         self.assertLess(None, doc2)
-
-
-if __name__ == '__main__':
-    unittest.main()
