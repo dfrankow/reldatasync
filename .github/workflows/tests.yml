@@ -17,8 +17,8 @@ jobs:
         image: postgres:13.1
         env:
           POSTGRES_USER: postgres
-          # no password
-          # POSTGRES_PASSWORD: postgres
+          # needs a password
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: github-actions
         ports:
           - 5432:5432 # exposing 5432 port for application to use
@@ -43,4 +43,5 @@ jobs:
         python setup.py test
       env:
         POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: postgres
         POSTGRES_HOST: localhost

@@ -153,11 +153,14 @@ def _dbconnstr(dbname=None):
     You can change host and server with environment variables POSTGRES_HOST
     and POSTGRES_SERVER.
     """
-    host = os.getenv('POSTGRES_HOST', 'db')
+    host = os.getenv('POSTGRES_HOST', 'localhost')
     user = os.getenv('POSTGRES_USER', 'postgres')
+    password = os.getenv('POSTGRES_PASSWORD', None)
     the_str = f"host={host} user={user}"
     if dbname:
-        the_str += ' dbname=%s' % dbname
+        the_str += f' dbname={dbname}'
+    if password:
+        the_str += f' password={password}'
     return the_str
 
 
