@@ -31,7 +31,13 @@ export POSTGRES_HOST=...
 export POSTGRES_USER=...
 ```
 
-Run sync_tests:
+Put reldatasync into the path:
+
+```
+export PYTHONPATH=../reldatasync
+```
+
+Run tests:
 
 ```
 python -m unittest discover -s tests 
