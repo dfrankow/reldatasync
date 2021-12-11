@@ -6,6 +6,3 @@ Building
 - Download Java
 - Download Maven
 - "mvn package"
-- Download ant
-- "ant"
-- builds reldatasync.jar
