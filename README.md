@@ -37,10 +37,11 @@ Put reldatasync into the path:
 export PYTHONPATH=../reldatasync
 ```
 
-Run tests:
+Run tests with either of the following two commands:
 
 ```
-python -m unittest discover -s tests 
+python -m unittest discover -s tests
+python setup.py test
 ```
 
 
