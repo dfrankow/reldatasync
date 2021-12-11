@@ -64,13 +64,11 @@ $ docker-compose run data_sync nosetests tests/test_sync.py
 You shouldn't have to give the "test_sync.py", but
 nosetests gets confused about the path.
 
-To run tests and show logging from the `test_sync` logger (BROKEN):
+To run `test_sync.py` with DEBUG logging:
 
 ```
-$ docker-compose run data_sync nosetests --debug=tests.test_sync tests/test_sync.py
+$ docker-compose run data_sync bash -c "LOG_LEVEL=DEBUG python -m unittest tests.test_sync"
 ```
-
-See also [stackoverflow](https://stackoverflow.com/questions/32565562/make-nose-test-runner-show-logging-even-if-tests-pass).
 
 To see the postgres DB:
 
@@ -84,7 +82,7 @@ Test client and server
 To run a test that starts the server and applies client.py:
 
 ```
-$ docker-compose run --rm data_sync /app/tests/test_server_and_client.py 
+$ docker-compose run --rm data_sync /app/tests/test_server_and_client.py
 ```
 
 
