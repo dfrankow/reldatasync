@@ -1,18 +1,36 @@
 package org.maventy.reldatasync;
 
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+
+import java.io.IOException;
+
+
 public class TestClient {
-    public static void main() {
+    private static Response post(String url) throws IOException {
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder()
+                .url(url)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful())
+                throw new IOException("Unexpected code " + response);
+
+//            System.out.println(response.body().string());
+            return response;
+        }
+    }
+    public static void main(String[] args) throws IOException {
         String serverUrl = "0.0.0.0:5000/";
         String baseUrl = "http://" + serverUrl;
         RestClientSourceDatastore client =
                 new RestClientSourceDatastore(baseUrl, "table");
 
-        /*
-            # Create table1
-        resp = requests.post(server_url('table1'))
-        assert resp.status_code == 201
-         */
-        resp = post(baseUrl + "table1");
+        // Create table1
+        Response resp = post(baseUrl + "table1");
+        assert resp.code() == 201;
 
         /*
 
