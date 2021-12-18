@@ -4,5 +4,12 @@ Building
 --------
 
 - Download Java
+
+For OS X:
+
+```
+brew install openjdk
+```
+
 - Download Maven
 - "mvn package"
