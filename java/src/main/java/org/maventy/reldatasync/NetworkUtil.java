@@ -1,14 +1,8 @@
 package org.maventy.reldatasync;
 
-import org.jetbrains.annotations.NotNull;
-
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
-//import java.net.http.HttpRequest;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 public class NetworkUtil {
     private static final String REQUEST_REFERER = "reldatasync";

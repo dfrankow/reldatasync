@@ -1,13 +1,15 @@
 package org.maventy.reldatasync;
 
+import okhttp3.*;
 import org.jetbrains.annotations.NotNull;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
-import java.io.*;
-import java.net.*;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.util.*;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 // Communicate to a REST server.
 public class RestClientSourceDatastore {
@@ -23,41 +25,37 @@ public class RestClientSourceDatastore {
         return this.baseurl + this.table + rest;
     }
 
-    public Document get(String docid) {
+    public Document get(String docid) throws IOException, ParseException {
         Document ret = null;
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(serverUrl("/doc/" + docid)))
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder()
+                .url(serverUrl("/doc/" + docid))
                 .build();
-        try {
-            HttpResponse<String> resp =
-                    client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() == 200) {
-                ret = new Document(resp.body());
+        try (Response response = client.newCall(request).execute()) {
+            if (response.code() == 200) {
+                ret = new Document(response.body().string());
             }
-        } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
         }
 
         return ret;
     }
 
     public void put(@NotNull final Document doc) throws IOException {
-        var client = HttpClient.newHttpClient();
+        OkHttpClient client = new OkHttpClient();
 
-        var paramValues = new HashMap<>() {{
-            put("json", doc.toJsonString());
-        }};
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(serverUrl("/doc")))
-                .POST(NetworkUtil.ofFormData(paramValues))
+        RequestBody formBody = new FormBody.Builder()
+                .add("json", doc.toJsonString())
                 .build();
-        try {
-            HttpResponse<String> resp =
-                    client.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch (InterruptedException e) {
-            throw(new IOException(e));
+
+        Request request = new Request.Builder()
+                .url(serverUrl("/doc"))
+                .post(formBody)
+                .build();
+        try (Response response = client.newCall(request).execute()) {
+            if (response.code() != 200) {
+                throw new IOException(
+                        response.code() + ": " + response.message());
+            }
         }
     }
 
@@ -66,29 +64,25 @@ public class RestClientSourceDatastore {
         public List<Document> documents;
     }
 
-    public DocsSinceValue getDocsSince(final int theSeq, final int num) {
+    public DocsSinceValue getDocsSince(final int theSeq, final int num) throws IOException, ParseException {
         DocsSinceValue ret = null;
-        HttpClient client = HttpClient.newHttpClient();
-        var paramValues = new HashMap<>() {{
-            put("start_sequence_id", theSeq);
-            put("chunk_size", num);
-        }};
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(serverUrl("/docs")))
-                .POST(NetworkUtil.ofFormData(paramValues))
+        OkHttpClient client = new OkHttpClient();
+        RequestBody formBody = new FormBody.Builder()
+                .add("start_sequence_id", "" + theSeq)
+                .add("chunk_size", "" + num)
+                .build();
+        Request request = new Request.Builder()
+                .url(serverUrl("/docs"))
+                .post(formBody)
                 .build();
 
-        try {
-            HttpResponse<String> resp =
-                    client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            int status = resp.statusCode();
-            if (status == 200) {
-                String respBody = resp.body();
+        try (Response response = client.newCall(request).execute()) {
+            if (response.code() == 200) {
+                String respBody = response.body().string();
 
                 // ret = js['current_sequence_id'], js['documents']
                 // Parse json from the string and put it in the map
-                JSONObject jo = (JSONObject) new JSONParser().parse(resp);
+                JSONObject jo = (JSONObject) new JSONParser().parse(respBody);
                 int currentSequenceId = (Integer) jo.get("current_sequence_id");
                 List<Document> docs = new ArrayList<>();
                 JSONArray ja = (JSONArray) jo.get("documents");
@@ -100,8 +94,6 @@ public class RestClientSourceDatastore {
                 ret.currentSequenceId = currentSequenceId;
                 ret.documents = docs;
             }
-        } catch (InterruptedException | IOException e) {
-            e.printStackTrace();
         }
 
         return ret;
