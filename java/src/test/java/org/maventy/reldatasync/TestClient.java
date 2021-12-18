@@ -1,8 +1,13 @@
 package org.maventy.reldatasync;
 
 import okhttp3.*;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
 import java.io.IOException;
+import java.util.List;
 
 
 public class TestClient {
@@ -14,11 +19,7 @@ public class TestClient {
                 .post(emptyBody)
                 .build();
 
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful())
-                throw new IOException("Unexpected code " + response);
-            return response;
-        }
+        return client.newCall(request).execute();
     }
 
     private static Response get(String url) throws IOException {
@@ -27,44 +28,49 @@ public class TestClient {
                 .url(url)
                 .build();
 
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful())
-                throw new IOException("Unexpected code " + response);
-            return response;
-        }
+        return client.newCall(request).execute();
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, ParseException {
         String serverUrl = "127.0.0.1:5000/";
         String baseUrl = "http://" + serverUrl;
 //        RestClientSourceDatastore client =
 //                new RestClientSourceDatastore(baseUrl, "table");
 
         // Create table1
-        Response resp = post(baseUrl + "table1");
-        assert resp.code() == 201;
+        try (Response resp = post(baseUrl + "table1")) {
+            assert resp.code() == 201;
+        }
 
         // Check for table1
-        resp = get(baseUrl + "table1");
-        assert resp.code() == 200;
-        String ct = resp.header("content-type");
-        assert "text/html; charset=utf-8".equals(ct);
-        ResponseBody body = resp.body();
-        assert body != null && body.string().length() == 0;
+        try (Response resp = get(baseUrl + "table1")) {
+            assert resp.code() == 200;
+            String ct = resp.header("content-type");
+            assert "text/html; charset=utf-8".equals(ct);
+            ResponseBody body = resp.body();
+            assert body != null && body.string().length() == 0;
+        }
 
+        // Check for non-existent table2
+        try (Response resp = get(baseUrl + "table2")){
+            assert resp.code() == 404;
+        }
+
+        // Check for docs in table1
+        try (Response resp = get(baseUrl + "table1/docs")) {
+            assert resp.code() == 200;
+            String bodyStr = resp.body().string();
+            String ct = resp.header("content-type");
+            assert "text/html; charset=utf-8".equals(ct);
+            JSONObject jo = (JSONObject) new JSONParser().parse(bodyStr);
+            List<Document> docs = Document.fromDocumentsJson(
+                    (JSONArray) jo.get("documents"));
+            assert docs.size() == 0;
+            assert (Integer) jo.get("current_sequence_id") == 0;
+        }
+
+        System.out.println("SUCCESS");
         /*
-
-
-    # Check for table1
-    resp = requests.get(server_url('table1'))
-    assert resp.status_code == 200
-    ct = resp.headers['content-type']
-    assert ct == 'text/html; charset=utf-8', f"content type '{ct}'"
-    assert resp.text == ""
-
-    # Check for non-existent table2
-    resp = requests.get(server_url('table2'))
-    assert resp.status_code == 404
 
     # Check for docs in table1
     resp = requests.get(server_url('table1/docs'))
