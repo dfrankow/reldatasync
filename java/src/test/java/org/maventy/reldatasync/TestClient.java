@@ -1,5 +1,6 @@
 package org.maventy.reldatasync;
 
+import okhttp3.FormBody;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -10,8 +11,10 @@ import java.io.IOException;
 public class TestClient {
     private static Response post(String url) throws IOException {
         OkHttpClient client = new OkHttpClient();
+        FormBody emptyBody = new FormBody.Builder().build();
         Request request = new Request.Builder()
                 .url(url)
+                .post(emptyBody)
                 .build();
 
         try (Response response = client.newCall(request).execute()) {
@@ -23,7 +26,7 @@ public class TestClient {
         }
     }
     public static void main(String[] args) throws IOException {
-        String serverUrl = "0.0.0.0:5000/";
+        String serverUrl = "127.0.0.1:5000/";
         String baseUrl = "http://" + serverUrl;
         RestClientSourceDatastore client =
                 new RestClientSourceDatastore(baseUrl, "table");
