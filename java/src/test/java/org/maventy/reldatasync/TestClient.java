@@ -1,9 +1,6 @@
 package org.maventy.reldatasync;
 
-import okhttp3.FormBody;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
+import okhttp3.*;
 
 import java.io.IOException;
 
@@ -20,36 +17,43 @@ public class TestClient {
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful())
                 throw new IOException("Unexpected code " + response);
-
-//            System.out.println(response.body().string());
             return response;
         }
     }
+
+    private static Response get(String url) throws IOException {
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder()
+                .url(url)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful())
+                throw new IOException("Unexpected code " + response);
+            return response;
+        }
+    }
+
     public static void main(String[] args) throws IOException {
         String serverUrl = "127.0.0.1:5000/";
         String baseUrl = "http://" + serverUrl;
-        RestClientSourceDatastore client =
-                new RestClientSourceDatastore(baseUrl, "table");
+//        RestClientSourceDatastore client =
+//                new RestClientSourceDatastore(baseUrl, "table");
 
         // Create table1
         Response resp = post(baseUrl + "table1");
         assert resp.code() == 201;
 
+        // Check for table1
+        resp = get(baseUrl + "table1");
+        assert resp.code() == 200;
+        String ct = resp.header("content-type");
+        assert "text/html; charset=utf-8".equals(ct);
+        ResponseBody body = resp.body();
+        assert body != null && body.string().length() == 0;
+
         /*
 
-def main():
-    parser = argparse.ArgumentParser(description='Test REST server.')
-    parser.add_argument('--server-url', '-s', dest='server_url',
-                        required=True,
-                        help='URL of the server')
-    args = parser.parse_args()
-    base_url = "http://" + args.server_url
-    # server_url is a function that returns base + rest
-    server_url = lambda url: base_url + url
-
-    # Create table1
-    resp = requests.post(server_url('table1'))
-    assert resp.status_code == 201
 
     # Check for table1
     resp = requests.get(server_url('table1'))
