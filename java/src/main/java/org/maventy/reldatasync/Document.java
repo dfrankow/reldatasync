@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 public class Document extends TreeMap<String, Object> {
-    private static final String ID = "_id";
+    public static final String ID = "_id";
 
     public static List<Document> fromDocumentsJson(JSONArray ja) throws ParseException {
         List<Document> docs = new ArrayList<Document>();
@@ -21,6 +21,8 @@ public class Document extends TreeMap<String, Object> {
         }
         return docs;
     }
+
+    public Document() {}
 
     public Document(String json) throws ParseException {
         // Parse json from the string and put it in the map
