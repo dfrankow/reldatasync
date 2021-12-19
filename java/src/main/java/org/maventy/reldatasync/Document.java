@@ -12,6 +12,7 @@ import java.util.TreeMap;
 
 public class Document extends TreeMap<String, Object> {
     public static final String ID = "_id";
+    public static final String REV = "_rev";
 
     public static List<Document> fromDocumentsJson(JSONArray ja) throws ParseException {
         List<Document> docs = new ArrayList<>();
