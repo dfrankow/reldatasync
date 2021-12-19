@@ -14,10 +14,10 @@ public class Document extends TreeMap<String, Object> {
     public static final String ID = "_id";
 
     public static List<Document> fromDocumentsJson(JSONArray ja) throws ParseException {
-        List<Document> docs = new ArrayList<Document>();
+        List<Document> docs = new ArrayList<>();
         for (Object obj : ja) {
-            Map.Entry entry = (Map.Entry) obj;
-            docs.add(new Document((JSONObject) obj));
+            JSONObject jo = (JSONObject) obj;
+            docs.add(new Document(jo));
         }
         return docs;
     }
@@ -32,7 +32,7 @@ public class Document extends TreeMap<String, Object> {
     public Document(JSONObject jo) {
         for (Object obj : jo.entrySet()) {
             Map.Entry<String, Object> entry = (Map.Entry<String, Object>) obj;
-            this.put((String) entry.getKey(), (String) entry.getValue());
+            this.put(entry.getKey(), entry.getValue());
         }
         assert this.containsKey(Document.ID);
     }

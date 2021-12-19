@@ -99,7 +99,7 @@ public class TestClient {
             JSONObject jo = (JSONObject) new JSONParser().parse(bodyStr);
             assert (Integer) jo.get("num_docs_put") == 3;
         }
-        
+
         System.out.println("SUCCESS");
         /*
 
