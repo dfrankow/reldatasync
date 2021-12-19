@@ -103,36 +103,30 @@ public class TestClient {
         }
 
         // Put the same three docs in table1, num_docs_put==0
-//        resp = requests.post(server_url('table1/docs'), json=data)
-//        assert resp.status_code == 200
-//        js = resp.json()
-//        assert js['num_docs_put'] == 0
+        try (Response resp = post(baseUrl + "table1/docs", data.toJSONString())) {
+            assertEquals(200, resp.code());
+            String bodyStr = resp.body().string();
+            JSONObject jo = (JSONObject) new JSONParser().parse(bodyStr);
+            assertEquals(0, (long) jo.get("num_docs_put"));
+        }
+
+        // Check three docs in table1
+        try (Response resp = get(baseUrl + "table1/docs")) {
+            assertEquals(200, resp.code());
+            String ct = resp.header("application/json");
+            String bodyStr = resp.body().string();
+            JSONObject jo = (JSONObject) new JSONParser().parse(bodyStr);
+            JSONArray docs = (JSONArray) jo.get("documents");
+            assertEquals(3, (long) docs.size());
+            assertEquals(3, (long) jo.get("current_sequence_id"));
+            // A server assigned revision numbers:
+            assertEquals(1, (long) ((JSONObject)docs.get(0)).get(Document.REV));
+            assertEquals(2, (long) ((JSONObject)docs.get(1)).get(Document.REV));
+            assertEquals(3, (long) ((JSONObject)docs.get(2)).get(Document.REV));
+        }
 
         System.out.println("SUCCESS");
         /*
-
-    # Put the same three docs in table1, num_docs_put==0
-    resp = requests.post(server_url('table1/docs'), json=data)
-    assert resp.status_code == 200
-    js = resp.json()
-    assert js['num_docs_put'] == 0
-
-    # Check three docs in table1
-    resp = requests.get(server_url('table1/docs'))
-    assert resp.status_code == 200
-    ct = resp.headers['content-type']
-    assert ct == 'application/json', f"content type '{ct}'"
-    js = resp.json()
-    assert len(js['documents']) == 3, f'js is {js}'
-    assert js['current_sequence_id'] == 3, f'js is {js}'
-    # server assigned revision numbers:
-    d1['_rev'] = 1
-    d2['_rev'] = 2
-    d3['_rev'] = 3
-    docs = js['documents']
-    assert d1 in docs
-    assert d2 in docs
-    assert d3 in docs
 
     # Put docs in a local datastore
     ds = MemoryDatastore('datastore')
