@@ -27,13 +27,6 @@ public class Document extends TreeMap<String, Object> {
         this((JSONObject) new JSONParser().parse(json));
     }
 
-//    public Document(Map<Object, Object> map) {
-//        for (Map.Entry<Object, Object> entry : map.entrySet()) {
-//            this.put(entry.getKey(), entry.getValue());
-//        }
-//        assert this.containsKey(Document.ID);
-//    }
-
     public Document(JSONObject jo) {
         for (Object obj : jo.entrySet()) {
             Map.Entry<String, Object> entry = (Map.Entry<String, Object>) obj;
