@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-public class Document extends TreeMap<String, String> {
+public class Document extends TreeMap<String, Object> {
     private static final String ID = "_id";
 
     public static List<Document> fromDocumentsJson(JSONArray ja) throws ParseException {
@@ -27,9 +27,16 @@ public class Document extends TreeMap<String, String> {
         this((JSONObject) new JSONParser().parse(json));
     }
 
+//    public Document(Map<Object, Object> map) {
+//        for (Map.Entry<Object, Object> entry : map.entrySet()) {
+//            this.put(entry.getKey(), entry.getValue());
+//        }
+//        assert this.containsKey(Document.ID);
+//    }
+
     public Document(JSONObject jo) {
         for (Object obj : jo.entrySet()) {
-            Map.Entry entry = (Map.Entry) obj;
+            Map.Entry<String, Object> entry = (Map.Entry<String, Object>) obj;
             this.put((String) entry.getKey(), (String) entry.getValue());
         }
         assert this.containsKey(Document.ID);
@@ -37,9 +44,9 @@ public class Document extends TreeMap<String, String> {
 
     public String toJsonString() {
         JSONObject jo = new JSONObject();
-        for (Map.Entry<String, String> stringStringEntry : this.entrySet()) {
-            Map.Entry entry = (Map.Entry) stringStringEntry;
-            jo.put((String) entry.getKey(), (String) entry.getValue());
+        for (Map.Entry<String, Object> obj : this.entrySet()) {
+            Map.Entry<String, Object> entry = (Map.Entry<String, Object>) obj;
+            jo.put(entry.getKey(), entry.getValue());
         }
         return jo.toJSONString();
     }
