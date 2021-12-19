@@ -45,3 +45,7 @@ jobs:
         POSTGRES_USER: postgres
         POSTGRES_PASSWORD: postgres
         POSTGRES_HOST: localhost
+    - name: Run java tests
+      run: |
+        cd java
+        mvn test
