@@ -9,6 +9,8 @@ import org.json.simple.parser.ParseException;
 import java.io.IOException;
 import java.util.List;
 
+import static junit.framework.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class TestClient {
     private static final String APPLICATION_JSON = "application/json";
@@ -45,34 +47,34 @@ public class TestClient {
 
         // Create table1
         try (Response resp = post(baseUrl + "table1", "")) {
-            assert resp.code() == 201;
+            assertEquals(201, resp.code());
         }
 
         // Check for table1
         try (Response resp = get(baseUrl + "table1")) {
-            assert resp.code() == 200;
+            assertEquals(200, resp.code());
             String ct = resp.header("content-type");
-            assert "text/html; charset=utf-8".equals(ct);
+            assertEquals("text/html; charset=utf-8", ct);
             ResponseBody body = resp.body();
-            assert body != null && body.string().length() == 0;
+            assertTrue(body != null && body.string().length() == 0);
         }
 
         // Check for non-existent table2
         try (Response resp = get(baseUrl + "table2")){
-            assert resp.code() == 404;
+            assertEquals(404, resp.code());
         }
 
         // Check for docs in table1
         try (Response resp = get(baseUrl + "table1/docs")) {
-            assert resp.code() == 200;
+            assertEquals(200, resp.code());
             String bodyStr = resp.body().string();
             String ct = resp.header("content-type");
-            assert "text/html; charset=utf-8".equals(ct);
+            assertEquals("application/json", ct);
             JSONObject jo = (JSONObject) new JSONParser().parse(bodyStr);
             List<Document> docs = Document.fromDocumentsJson(
                     (JSONArray) jo.get("documents"));
-            assert docs.size() == 0;
-            assert (Integer) jo.get("current_sequence_id") == 0;
+            assertEquals(0, docs.size());
+            assertEquals(0, (long) jo.get("current_sequence_id"));
         }
 
         // Put three docs in table1
@@ -94,26 +96,20 @@ public class TestClient {
             add(d3);
         }};
         try (Response resp = post(baseUrl + "table1/docs", data.toJSONString())) {
-            assert resp.code() == 200;
+            assertEquals(200, resp.code());
             String bodyStr = resp.body().string();
             JSONObject jo = (JSONObject) new JSONParser().parse(bodyStr);
-            assert (Integer) jo.get("num_docs_put") == 3;
+            assertEquals(3, (long) jo.get("num_docs_put"));
         }
+
+        // Put the same three docs in table1, num_docs_put==0
+//        resp = requests.post(server_url('table1/docs'), json=data)
+//        assert resp.status_code == 200
+//        js = resp.json()
+//        assert js['num_docs_put'] == 0
 
         System.out.println("SUCCESS");
         /*
-
-    # Put three docs in table1
-    d1 = {"_id": '1', "var1": "value1"}
-    d2 = {"_id": '2', "var1": "value2"}
-    d3 = {"_id": '3', "var1": "value3"}
-    data = [d1, d2, d3]
-    resp = requests.post(server_url('table1/docs'), json=data)
-    assert resp.status_code == 200
-    ct = resp.headers['content-type']
-    assert ct == 'application/json', f"content type '{ct}'"
-    js = resp.json()
-    assert js['num_docs_put'] == 3
 
     # Put the same three docs in table1, num_docs_put==0
     resp = requests.post(server_url('table1/docs'), json=data)
