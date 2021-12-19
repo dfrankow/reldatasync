@@ -11,13 +11,19 @@ import java.util.List;
 
 
 public class TestClient {
-    private static Response post(String url) throws IOException {
+    private static final String APPLICATION_JSON = "application/json";
+
+    private static Response post(String url, String bodyJsonData) throws IOException {
         OkHttpClient client = new OkHttpClient();
-        FormBody emptyBody = new FormBody.Builder().build();
-        Request request = new Request.Builder()
-                .url(url)
-                .post(emptyBody)
-                .build();
+        Request.Builder builder = new Request.Builder()
+                .url(url);
+
+        RequestBody body = new FormBody.Builder().build();  // empty
+        if (bodyJsonData != null) {
+            body = RequestBody.create(
+                    bodyJsonData, MediaType.parse(APPLICATION_JSON));
+        }
+        Request request = builder.post(body).build();
 
         return client.newCall(request).execute();
     }
@@ -38,7 +44,7 @@ public class TestClient {
 //                new RestClientSourceDatastore(baseUrl, "table");
 
         // Create table1
-        try (Response resp = post(baseUrl + "table1")) {
+        try (Response resp = post(baseUrl + "table1", "")) {
             assert resp.code() == 201;
         }
 
@@ -69,17 +75,33 @@ public class TestClient {
             assert (Integer) jo.get("current_sequence_id") == 0;
         }
 
+        // Put three docs in table1
+        JSONObject d1 = new JSONObject() {{
+            put(Document.ID, 1);
+            put("var1", "value1");
+        }};
+        JSONObject d2 = new JSONObject() {{
+            put(Document.ID, 2);
+            put("var1", "value2");
+        }};
+        JSONObject d3 = new JSONObject() {{
+            put(Document.ID, 3);
+            put("var1", "value3");
+        }};
+        JSONArray data = new JSONArray() {{
+            add(d1);
+            add(d2);
+            add(d3);
+        }};
+        try (Response resp = post(baseUrl + "table1/docs", data.toJSONString())) {
+            assert resp.code() == 200;
+            String bodyStr = resp.body().string();
+            JSONObject jo = (JSONObject) new JSONParser().parse(bodyStr);
+            assert (Integer) jo.get("num_docs_put") == 3;
+        }
+        
         System.out.println("SUCCESS");
         /*
-
-    # Check for docs in table1
-    resp = requests.get(server_url('table1/docs'))
-    assert resp.status_code == 200
-    ct = resp.headers['content-type']
-    assert ct == 'application/json', f"content type '{ct}'"
-    js = resp.json()
-    assert js['documents'] == []
-    assert js['current_sequence_id'] == 0
 
     # Put three docs in table1
     d1 = {"_id": '1', "var1": "value1"}
