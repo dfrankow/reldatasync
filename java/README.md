@@ -9,13 +9,5 @@ Android versions.  https://square.github.io/okhttp/#requirements says:
 Building
 --------
 
-- Download Java
-
-For OS X:
-
-```
-brew install openjdk
-```
-
-- Download Maven
-- "mvn package"
+- Download Android Studio
+- Open android project
