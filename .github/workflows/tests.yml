@@ -47,5 +47,5 @@ jobs:
         POSTGRES_HOST: localhost
     - name: Run java tests
       run: |
-        cd java
-        mvn test
+        cd java/android
+        ./gradlew check
