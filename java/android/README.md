@@ -11,3 +11,9 @@ Building
 
 - Download Android Studio
 - Open android project
+
+OR
+
+- run ./gradlew <task>
+
+`task` can be `tasks` to see the list of possible tasks to run.
