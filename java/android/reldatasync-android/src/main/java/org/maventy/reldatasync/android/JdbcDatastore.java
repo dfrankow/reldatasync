@@ -9,7 +9,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,15 +23,6 @@ public class JdbcDatastore {
         this.conn = conn;
         this.table = table;
     }
-
-    private static class NamesAndTypes {
-        public final List<String> names;
-        public final List<Integer> types;
-        public NamesAndTypes(List<String> names, List<Integer> types) {
-            this.names = names;
-            this.types = types;
-        }
-    };
 
     private static List<String> getColumnNames(ResultSet rs) throws SQLException {
         List<String> names = new ArrayList<>();
