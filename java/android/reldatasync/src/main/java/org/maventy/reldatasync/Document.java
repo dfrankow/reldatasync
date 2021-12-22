@@ -47,8 +47,7 @@ public class Document extends TreeMap<String, Object> {
 
     public String toJsonString() {
         JSONObject jo = new JSONObject();
-        for (Map.Entry<String, Object> obj : this.entrySet()) {
-            Map.Entry<String, Object> entry = (Map.Entry<String, Object>) obj;
+        for (Map.Entry<String, Object> entry : this.entrySet()) {
             jo.put(entry.getKey(), entry.getValue());
         }
         return jo.toJSONString();
