@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.UUID;
@@ -43,19 +44,41 @@ public class TestJdbcDataStore {
             stmt.executeUpdate(sql);
         }
     }
+
+    private static String randomUUIDString() {
+        return UUID.randomUUID().toString().replaceAll("-", "");
+    }
+
     @Test
     public void test1() throws IOException, SQLException {
         try (AutoDeletingTempFile file = new AutoDeletingTempFile("tmp", ".db");) {
             setConnection(file.getFile());
-            assertEquals(1, 1);
         }
 
         // Table created outside JdbcDatastore
         createTable1();
         JdbcDatastore jds = new JdbcDatastore(conn, "table1");
-        UUID id = UUID.randomUUID();
         // remove -s
-        String foo = id.toString().replaceAll("-", "");
-        assertNull(jds.get(foo));
+        String id = randomUUIDString();
+        assertNull(jds.get(id));
+
+        // Add row to table1
+        String sql = "insert into table1 (" + Document.ID + ", first, last, age)" +
+                " VALUES(?, ?, ?, ?)";
+        String first = "a first";
+        String last = "a last";
+        int age = 40;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, id);
+            ps.setString(2, first);
+            ps.setString(3, last);
+            ps.setInt(4, age);
+            ps.execute();
+        }
+        Document doc = jds.get(id);
+        assertEquals(first, doc.get("first"));
+        assertEquals(last, doc.get("last"));
+        assertEquals(id, doc.get(Document.ID));
+        assertEquals(age, doc.get("age"));
     }
 }

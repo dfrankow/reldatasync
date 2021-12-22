@@ -34,19 +34,6 @@ public class JdbcDatastore {
         }
     };
 
-    private static NamesAndTypes getColumnNamesAndTypes(ResultSet rs) throws SQLException {
-        List<String> names = new ArrayList<>();
-        List<Integer> types = new ArrayList<>();
-        ResultSetMetaData meta = rs.getMetaData();
-        int count = meta.getColumnCount();
-        for(int idx = 1; idx <=count; idx++) {
-            String name = meta.getColumnName(idx);
-            names.add(name);
-            types.add(meta.getColumnType(idx));
-        }
-        return new NamesAndTypes(names, types);
-    }
-
     private static List<String> getColumnNames(ResultSet rs) throws SQLException {
         List<String> names = new ArrayList<>();
         ResultSetMetaData meta = rs.getMetaData();
@@ -67,16 +54,10 @@ public class JdbcDatastore {
             if (rs.next()) {
                 JSONObject jo = new JSONObject();
 
-                NamesAndTypes nat = getColumnNamesAndTypes(rs);
-                for (int idx = 0; idx < nat.names.size(); idx++) {
-                    int type = nat.types.get(idx);
-                    // Check if type is supported
-                    if (!(type == Types.INTEGER || type == Types.CHAR)) {
-                        throw new SQLException("Unsupported type " + type);
-                    }
-
-                    String name = nat.names.get(idx);
-                    jo.put(name, rs.getObject(idx));
+                List<String> names = getColumnNames(rs);
+                for (int idx = 0; idx < names.size(); idx++) {
+                    String name = names.get(idx);
+                    jo.put(name, rs.getObject(idx+1));
                 }
                 doc = new Document(jo);
             }
