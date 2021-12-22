@@ -30,7 +30,14 @@ public class Document extends TreeMap<String, Object> {
         this((JSONObject) new JSONParser().parse(json));
     }
 
-    public Document(JSONObject jo) {
+    /**
+     * Constructor for a map of (key, value) pairs.
+     *
+     * NOTE this constructor works for org.json.simple.JSONObject, which extends a map.
+     *
+     * @param jo  map of key name to value.
+     */
+    public Document(Map<String, Object> jo) {
         for (Object obj : jo.entrySet()) {
             Map.Entry<String, Object> entry = (Map.Entry<String, Object>) obj;
             this.put(entry.getKey(), entry.getValue());
