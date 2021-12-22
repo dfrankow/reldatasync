@@ -3,9 +3,8 @@ package org.maventy.reldatasync;
 import org.junit.Test;
 
 import java.util.HashMap;
-import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 public class TestDocument {
     @Test
@@ -24,5 +23,14 @@ public class TestDocument {
         assertEquals(
                 "{\"int1\":10,\"string1\":\"value1\",\"_id\":\"1\"}",
                 doc.toJsonString());
+
+        assertEquals(doc, doc);
+        assertFalse(doc.equals(null));
+
+        Document doc2 = new Document(doc);
+        // Not the same object
+        assertNotSame(doc, doc2);
+        // But equals is the same
+        assertEquals(doc, doc2);
     }
 }

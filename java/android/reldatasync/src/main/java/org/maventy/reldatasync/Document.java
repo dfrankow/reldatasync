@@ -52,4 +52,32 @@ public class Document extends TreeMap<String, Object> {
         }
         return jo.toJSONString();
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        // self check
+        if (this == obj)
+            return true;
+
+        // null check
+        if (obj == null)
+            return false;
+
+        // type check and cast
+        if (getClass() != obj.getClass())
+            return false;
+        Document doc = (Document) obj;
+
+        // All keys must be the same
+        if (!keySet().equals(doc.keySet()))
+            return false;
+
+        // All values must be the same
+        for (String key: keySet()) {
+            if (get(key) != doc.get(key))
+                return false;
+        }
+
+        return true;
+    }
 }
