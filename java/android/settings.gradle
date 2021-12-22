@@ -8,3 +8,4 @@ dependencyResolutionManagement {
 rootProject.name = "Reldatasync"
 include ':app'
 include ':reldatasync'
+include ':reldatasync-android'
