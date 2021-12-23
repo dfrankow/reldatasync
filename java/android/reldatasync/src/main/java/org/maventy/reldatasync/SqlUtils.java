@@ -9,6 +9,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SqlUtils {
+    static boolean tableExists(Connection conn, String tableName) throws SQLException {
+        DatabaseMetaData meta = conn.getMetaData();
+        try (ResultSet rs = meta.getTables(null, null, tableName, new String[]{"TABLE"})) {
+            return rs.next();
+        }
+    }
+
     /**
      * Return list of column names for table from conn.
      *
