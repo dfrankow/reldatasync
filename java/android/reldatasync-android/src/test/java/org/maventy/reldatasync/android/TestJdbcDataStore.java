@@ -99,7 +99,6 @@ public class TestJdbcDataStore {
         );
         jds.put(doc);
         Document doc2 = jds.get(id2);
-        // TODO(dan): Implement put
-//        assertEquals(doc, doc2);
+        assertEquals(doc, doc2);
     }
 }
