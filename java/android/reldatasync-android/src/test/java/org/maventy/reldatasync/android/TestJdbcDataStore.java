@@ -84,20 +84,20 @@ public class TestJdbcDataStore {
         assertEquals(age, doc.get("age"));
 
         // Put a doc into the DB
-//        final String id2 = randomUUIDString();
-//        final String first2 = "first 2";
-//        final String last2 = "last 2";
-//        final int age2 = 50;
-//        doc = new Document(
-//                new HashMap<String, Object>() {{
-//                    put(Document.ID, id2);
-//                    put("first", first2);
-//                    put("last", last2);
-//                    put("age", age2);
-//                }}
-//        );
-//        jds.put(doc);
-//        Document doc2 = jds.get(id2);
-//        assertEquals(doc, doc2);
+        final String id2 = randomUUIDString();
+        final String first2 = "first 2";
+        final String last2 = "last 2";
+        final int age2 = 50;
+        doc = new Document(
+                new HashMap<String, Object>() {{
+                    put(Document.ID, id2);
+                    put("first", first2);
+                    put("last", last2);
+                    put("age", age2);
+                }}
+        );
+        jds.put(doc);
+        Document doc2 = jds.get(id2);
+        assertEquals(doc, doc2);
     }
 }

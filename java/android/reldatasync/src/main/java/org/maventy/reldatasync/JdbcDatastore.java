@@ -22,6 +22,11 @@ public class JdbcDatastore {
     public JdbcDatastore(Connection conn, String table) {
         this.conn = conn;
         this.table = table;
+
+        // TODO(dan): Init sequence_id if not present
+        //         # Check that the right tables exist
+        //         # Get the column names for self.tablename
+        // TODO(dan): Check that the table has ID, REV, and DELETED
     }
 
     private static List<String> getColumnNames(ResultSet rs) throws SQLException {
@@ -55,7 +60,37 @@ public class JdbcDatastore {
         return doc;
     }
 
+    private void pre_put(Document doc) {
+//        # copy doc so we don't modify caller's doc
+//        doc = doc.copy()
+//
+//        if doc.get(_REV, None) is None:
+//        self._increment_sequence_id()
+//        doc[_REV] = self._sequence_id
+//
+//        return doc
+    }
     public void put(final Document doc) throws IOException {
+//        """Put doc under docid.
+//
+//        If no seq, give it one.
+//        """
+//        doc = self._pre_put(doc)
+//
+//        # "ON CONFLICT" requires postgres 9.5+
+//                set_statement = ', '.join("%s=EXCLUDED.%s " % (col, col)
+//        for col in self.columnnames)
+//        upsert_statement = (
+//                "INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (_id) DO UPDATE"
+//        " SET %s" % (
+//                self.tablename,
+//                ','.join(self.columnnames),
+//                ','.join([r'%s' for _ in self.columnnames]),
+//        set_statement))
+//
+//        self.cursor.execute(
+//                upsert_statement,
+//                tuple([doc.get(key, None) for key in self.columnnames]))
     }
 
     public static class DocsSinceValue {
