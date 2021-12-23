@@ -12,7 +12,7 @@ import java.util.List;
 
 /**
  * Use datastore through a JDBC connection.
- * NOTE: currently only works with sqlite (because of ON CONFLICT SQL).
+ * NOTE: currently only works with sqlite (because of ON CONFLICT SQL syntax).
  */
 public class JdbcDatastore extends BaseDatastore {
     private final Connection conn;
