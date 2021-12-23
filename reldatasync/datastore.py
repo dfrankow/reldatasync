@@ -172,6 +172,7 @@ class Datastore(Generic[ID], ABC):
         if seq > self.get_peer_sequence_id(peer):
             self.peer_seq_ids[peer] = seq
 
+    # TODO: Should "get" not return a doc if its _DELETED is True?
     @abstractmethod
     def get(self, docid: ID) -> Document:
         pass
