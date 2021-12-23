@@ -61,15 +61,20 @@ public class TestJdbcDataStore {
         try (AutoDeletingTempFile file = new AutoDeletingTempFile("tmp", ".db");) {
             setConnection(file.getFile());
         }
+        JdbcDatastore.createSequenceIdsTable(conn);
 
         // Table created outside JdbcDatastore
         createTable1();
-        JdbcDatastore jds = new JdbcDatastore(conn, "table1");
+        JdbcDatastore jds = new JdbcDatastore(conn, "ds1", "table1");
+        assertEquals(0, jds.getSequenceId());
+
         // remove -s
         String id = randomUUIDString();
         assertNull(jds.get(id));
 
         // Add row to table1
+        // NOTE: not setting _REV means the datastore is in a bad state
+        // TODO: make a method to assign sequence numbers to everything
         String sql = "insert into table1 (" + Document.ID + ", first, last, age)" +
                 " VALUES(?, ?, ?, ?)";
         String first = "a first";

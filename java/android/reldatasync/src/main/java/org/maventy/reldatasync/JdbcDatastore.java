@@ -6,6 +6,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -15,12 +16,16 @@ import java.util.List;
  * NOTE: currently only works with sqlite (because of ON CONFLICT SQL syntax).
  */
 public class JdbcDatastore extends BaseDatastore {
+    public static final String SYNC_TABLE_NAME = "reldatasync_revisions";
+
     private final Connection conn;
     private final String tableName;
     private final List<String> columnNames;
     private final String upsertStatement;
 
-    public JdbcDatastore(Connection conn, String tableName) throws DatastoreException {
+    public JdbcDatastore(Connection conn, String id, String tableName) throws DatastoreException {
+        super(id);
+
         this.conn = conn;
         this.tableName = tableName;
 
@@ -29,8 +34,26 @@ public class JdbcDatastore extends BaseDatastore {
         } catch (SQLException throwable) {
             throw new DatastoreException(throwable);
         }
-        // TODO(dan): Init sequence_id if not present
-        //         # Check that the right tables exist
+
+        // Init sequence_id if not present
+        // "ON CONFLICT" requires postgres 9.5+ or sqlite
+        // See https://database.guide/how-on-conflict-works-in-sqlite/
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT OR IGNORE INTO " + SYNC_TABLE_NAME
+                + " (datastore_id, sequence_id)"
+                + " VALUES (?, 0)")) {
+            ps.setString(1, id);
+            ps.executeUpdate();
+        } catch (SQLException throwable) {
+            throw new DatastoreException(throwable);
+        }
+
+        // Initialize sequence id
+        super.setSequenceId(getSequenceId());
+
+        // TODO: Check that sequence_id in revisions table is >= max(REV)
+        //   in the data
+
         // Check that the table has ID, REV, and DELETED
         for (String name: new ArrayList<String>() {{
             add(Document.ID);
@@ -43,6 +66,19 @@ public class JdbcDatastore extends BaseDatastore {
         }
 
         this.upsertStatement = putStatement();
+    }
+
+    public static void createSequenceIdsTable(Connection conn) throws SQLException {
+        if (!SqlUtils.tableExists(conn, SYNC_TABLE_NAME)) {
+            String sql = "CREATE TABLE " + SYNC_TABLE_NAME +
+                    " (datastore_id VARCHAR(100) not NULL, " +
+                    "  sequence_id INTEGER not NUlL, " +
+                    "  PRIMARY KEY ( datastore_id ))";
+
+            try (Statement stmt = conn.createStatement()) {
+                stmt.executeUpdate(sql);
+            }
+        }
     }
 
     public Document get(String docid) throws DatastoreException {
@@ -112,5 +148,47 @@ public class JdbcDatastore extends BaseDatastore {
 
     public DocsSinceValue getDocsSince(final int theSeq, final int num) throws DatastoreException {
         throw new DatastoreException("TODO: implement");
+    }
+
+    @Override
+    protected void incrementSequenceId() throws DatastoreException {
+        // Would like to use RETURNING, but it's not supported until sqlite 3.35.0 (2021-03-12)
+        // See https://www.sqlite.org/draft/lang_returning.html
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE " + SYNC_TABLE_NAME
+                + " set sequence_id = sequence_id+1"
+                + " WHERE datastore_id=?")) {
+            ps.setString(1, id);
+            ps.executeUpdate();
+            super.setSequenceId(getSequenceId());
+            System.out.println("JDBC increment to " + sequenceId);
+        } catch (SQLException throwable) {
+            throw new DatastoreException(throwable);
+        }
+    }
+
+    public int getSequenceId() throws DatastoreException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT sequence_id FROM " + SYNC_TABLE_NAME + " WHERE datastore_id = ?")) {
+             ps.setString(1, id);
+             try (ResultSet rs = ps.executeQuery()) {
+                 rs.next();
+                 return rs.getInt("sequence_id");
+             }
+        } catch (SQLException throwable) {
+            throw new DatastoreException(throwable);
+        }
+    }
+
+    @Override
+    protected void setSequenceId(int seq) throws DatastoreException {
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT sequence_id FROM " + SYNC_TABLE_NAME)) {
+            rs.next();
+            super.setSequenceId(rs.getInt("sequence_id"));
+            System.out.println("JDBC set to " + sequenceId);
+        } catch (SQLException throwable) {
+            throw new DatastoreException(throwable);
+        }
     }
 }

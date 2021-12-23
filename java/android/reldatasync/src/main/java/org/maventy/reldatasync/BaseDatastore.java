@@ -1,17 +1,27 @@
 package org.maventy.reldatasync;
 
 public abstract class BaseDatastore implements Datastore {
+    /** Identifies datastore in messages and tables */
+    protected final String id;
+
+    /** Current max sequence id */
     protected int sequenceId;
 
-    protected void incrementSequenceId() {
+    protected BaseDatastore(String id) {
+        this.id = id;
+    }
+
+    protected void incrementSequenceId() throws DatastoreException {
         sequenceId++;
+        System.out.println("Base increment to " + sequenceId);
     }
 
-    protected void setSequenceId(int seq) {
+    protected void setSequenceId(int seq) throws DatastoreException {
         sequenceId = seq;
+        System.out.println("Base set to " + sequenceId);
     }
 
-    protected Document prePut(Document doc) {
+    protected Document prePut(Document doc) throws DatastoreException {
         // Copy doc so we don't modify caller's doc
         Document doc1 = doc.clone();
         if (doc.get(Document.REV) == null) {
