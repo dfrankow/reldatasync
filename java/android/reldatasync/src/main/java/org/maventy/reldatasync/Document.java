@@ -15,6 +15,7 @@ import java.util.TreeMap;
 
 public class Document extends TreeMap<String, Object> implements Comparable<Document> {
     public static final String ID = "_id";
+    /** REV is revision number */
     public static final String REV = "_rev";
     public static final String DELETED = "_deleted";
 
