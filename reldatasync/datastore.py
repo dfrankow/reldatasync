@@ -422,9 +422,12 @@ class PostgresDatastore(Datastore):
                 raise NameError("Field '%s' not in table '%s'" % (
                     field, self.tablename))
 
-        # TODO(dan): Check self.tablename has a unique index on _id
+        # TODO: Check self.tablename has a unique index on _id
         # Required for proper functioning of Postgres UPSERT
         # See also https://stackoverflow.com/a/36799500
+
+        # TODO: Check that sequence_id in revisions table is >= max(REV)
+        #   in the data
 
         return self
 
