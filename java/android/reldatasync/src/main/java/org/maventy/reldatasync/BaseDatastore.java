@@ -7,6 +7,10 @@ public abstract class BaseDatastore implements Datastore {
         sequenceId++;
     }
 
+    protected void setSequenceId(int seq) {
+        sequenceId = seq;
+    }
+
     protected Document prePut(Document doc) {
         // Copy doc so we don't modify caller's doc
         Document doc1 = doc.clone();
@@ -18,14 +22,35 @@ public abstract class BaseDatastore implements Datastore {
         return doc1;
     }
 
-    // TODO(dan): Implement put_if_needed?
-    // def put_if_needed(self, doc: Document) -> int
-    //            """Put doc under docid if seq is greater
-    //
-    //        Return number of records actually put (0 or 1).
-    //
-    //        As a side effect, this updates self.sequence_id if doc[_REV] is larger.
-    //        """
+    public boolean putIfNeeded(Document doc) throws DatastoreException {
+        boolean put = false;
+        Object docid = doc.get(Document.ID);
+        // # If there is no revision, treat it like rev 0
+        Integer seq = (Integer) doc.get(Document.REV);
+        if (seq == null) {
+            seq = 0;
+        }
+        Document myDoc = get((String)docid);
+        assert myDoc == null || myDoc.get(Document.REV) != null :
+            "myDoc should have REV";
+        Integer mySeq = null;
+        if (myDoc != null)
+            mySeq = (Integer) myDoc.get(Document.REV);
+
+        // If my doc is older, or equal time but smaller
+        if ((mySeq == null) || (mySeq < seq) || (
+                mySeq.equals(seq) && myDoc.compareTo(doc) < 0)) {
+            assert mySeq == null || mySeq < seq;
+            put(doc);
+            put = true;
+            // if this doc has a higher rev than our clock, move our clock up
+            // NOTE: this may be optional if we handle it at the sync level
+            if (seq > sequenceId) {
+                setSequenceId(seq);
+            }
+        }
+        return put;
+    }
 
     /**
      * Delete a doc in the datastore.
@@ -43,6 +68,8 @@ public abstract class BaseDatastore implements Datastore {
             put(doc);
         }
     }
+
+    protected abstract void put(final Document doc) throws DatastoreException;
 
 //    def get_peer_sequence_id(self, peer: str) -> int:
 //            """Get the seq we have for peer, or zero if we have none."""

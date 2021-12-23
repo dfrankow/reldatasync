@@ -19,7 +19,9 @@ import java.util.HashMap;
 import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(RobolectricTestRunner.class)
 public class TestJdbcDataStore {
@@ -38,6 +40,8 @@ public class TestJdbcDataStore {
     private void createTable1() throws SQLException {
         String sql = "CREATE TABLE table1 " +
                 "("+ Document.ID + " VARCHAR(32) not NULL, " +
+                " " + Document.REV + " INTEGER, " +
+                " " + Document.DELETED + " BOOLEAN, " +
                 " first VARCHAR(255), " +
                 " last VARCHAR(255), " +
                 " age INTEGER, " +
@@ -97,8 +101,15 @@ public class TestJdbcDataStore {
                     put("age", age2);
                 }}
         );
-        jds.put(doc);
+        // returns true because it had to put
+        assertTrue(jds.putIfNeeded(doc));
         Document doc2 = jds.get(id2);
+        // The put added fields
+        doc.put(Document.REV, 1);
+        doc.put(Document.DELETED, null);
         assertEquals(doc, doc2);
+
+        // returns false because it did not have to put
+        assertFalse(jds.putIfNeeded(doc));
     }
 }

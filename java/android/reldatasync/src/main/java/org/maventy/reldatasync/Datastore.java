@@ -13,14 +13,33 @@ public interface Datastore {
     };
 
     class DatastoreException extends Exception {
-        public final Throwable cause;
+        private final Throwable cause;
+        private final String msg;
+
         DatastoreException(Throwable cause) {
             this.cause = cause;
+            this.msg = null;
+        }
+
+        DatastoreException(String msg) {
+            cause = null;
+            this.msg = msg;
         }
 
         @Override
         public String toString() {
-            return "DatastoreException{" + "cause=" + cause + '}';
+            StringBuilder ret = new StringBuilder();
+            ret.append("DatastoreException{");
+            if (cause != null) {
+                assert msg == null;
+                ret.append("cause=" + cause);
+            }
+            if (msg != null) {
+                assert cause == null;
+                ret.append("message=" + msg);
+            }
+            ret.append('}');
+            return ret.toString();
         }
     }
 
@@ -34,12 +53,17 @@ public interface Datastore {
     Document get(String docid) throws DatastoreException;
 
     /**
-     * Store doc by its id.  If it already exists, replace it.
+     * Store doc by its id, only if it does not exist or is greater than the existing doc of that id.
+     *
+     * "Greater" is defined by Document.compareTo.
+     *
+     * As a side effect, this updates this.sequenceId if doc[REV] is larger.
      *
      * @param doc  Document to put.  If it has no _REV, give it one.
      * @throws DatastoreException  If can't put
+     * @return true if document was put, false if it did not need to be.
      */
-    void put(Document doc) throws DatastoreException;
+    boolean putIfNeeded(Document doc) throws DatastoreException;
 
     /**
      * If doc exists, set the deleted flag.  If it doesn't exist, do nothing.
