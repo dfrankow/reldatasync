@@ -1,5 +1,7 @@
 package org.maventy.reldatasync;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.List;
 
 public class StringUtils {
@@ -25,5 +27,19 @@ public class StringUtils {
         }
 
         return sb.toString();
+    }
+
+    /**
+     * Throwable stack trace to String.
+     *
+     * @param th  Throwable
+     * @return  String
+     */
+    public static String stackTraceToString(Throwable th) {
+        // see https://stackoverflow.com/a/1149712
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        th.printStackTrace(pw);
+        return sw.toString();
     }
 }
