@@ -33,6 +33,8 @@ public interface Datastore {
             if (cause != null) {
                 assert msg == null;
                 ret.append("cause=" + cause);
+                // Appending the entire stack trace seems crazy, but very helpful, esp in tests
+                ret.append("\n" + StringUtils.stackTraceToString(cause));
             }
             if (msg != null) {
                 assert cause == null;
