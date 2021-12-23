@@ -399,8 +399,8 @@ class PostgresDatastore(Datastore):
 
         # Init sequence_id if not present
         # "ON CONFLICT" requires postgres 9.5+
-        # See also https://stackoverflow.com/a/17267423/34935
-        # See also https://stackoverflow.com/a/30118648/34935
+        # See also https://stackoverflow.com/a/17267423
+        # See also https://stackoverflow.com/a/30118648
         self.cursor.execute(
             "INSERT INTO data_sync_revisions (datastore_id, sequence_id)"
             " VALUES (%s, 0)"
@@ -413,8 +413,8 @@ class PostgresDatastore(Datastore):
         # Get the column names for self.tablename
         self.cursor.execute("SELECT * FROM %s LIMIT 0" % self.tablename)
         self.columnnames = [desc[0] for desc in self.cursor.description]
-        self.nonid_columnnames = [name for name in self.columnnames
-                                  if name != _ID]
+        # self.nonid_columnnames = [name for name in self.columnnames
+        #                           if name != _ID]
 
         # Check that self.tablename has _id, _deleted, and _rev
         for field in (_ID, _REV, _DELETED):
@@ -424,7 +424,7 @@ class PostgresDatastore(Datastore):
 
         # TODO(dan): Check self.tablename has a unique index on _id
         # Required for proper functioning of Postgres UPSERT
-        # See also https://stackoverflow.com/a/36799500/34935
+        # See also https://stackoverflow.com/a/36799500
 
         return self
 
