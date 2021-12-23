@@ -27,10 +27,23 @@ public class TestDocument {
         assertEquals(doc, doc);
         assertFalse(doc.equals(null));
 
-        Document doc2 = new Document(doc);
+        // Shallow clone works
+        Document doc2 = doc.clone();
         // Not the same object
         assertNotSame(doc, doc2);
         // But equals is the same
         assertEquals(doc, doc2);
+
+        // Deep copy also works
+        Document doc3 = new Document(
+                new HashMap<String, Object>() {{
+                    put(Document.ID, "1");
+                    // Use "new String" so the string is not "interned"
+                    // (i.e. kept in a master list by the JVM), fixing ==
+                    put("string1", new String("value1"));
+                    put("int1", 10);
+                }}
+        );
+        assertEquals(doc, doc3);
     }
 }

@@ -13,6 +13,7 @@ import java.util.TreeMap;
 public class Document extends TreeMap<String, Object> {
     public static final String ID = "_id";
     public static final String REV = "_rev";
+    public static final String DELETED = "_deleted";
 
     public static List<Document> fromDocumentsJson(JSONArray ja) throws ParseException {
         List<Document> docs = new ArrayList<>();
@@ -72,12 +73,21 @@ public class Document extends TreeMap<String, Object> {
         if (!keySet().equals(doc.keySet()))
             return false;
 
-        // All values must be the same
+        // All values must be the same (using equals)
         for (String key: keySet()) {
-            if (get(key) != doc.get(key))
+            Object val1 = get(key);
+            Object val2 = doc.get(key);
+            if (val1 == null && val2 != null)
+                return false;
+            if (val1 != null && !val1.equals(val2))
                 return false;
         }
 
         return true;
+    }
+
+    @Override
+    public Document clone() {
+        return new Document(this);
     }
 }
