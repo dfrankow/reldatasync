@@ -76,12 +76,6 @@ public class JdbcDatastore extends BaseDatastore {
 
     private String putStatement() {
         // "ON CONFLICT" requires postgres 9.5+ or sqlite
-        List<String> elems = new ArrayList<>();
-        for (String col : columnNames) {
-            elems.add(String.format("%s=EXCLUDED.%s", col, col));
-        }
-        String setStatement = StringUtils.join(", ", elems);
-
         List<String> questions = new ArrayList<>();
         for (int idx = 0; idx < columnNames.size(); idx++) {
             questions.add("?");
