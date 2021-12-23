@@ -1,4 +1,4 @@
-package org.maventy.reldatasync.android;
+package org.maventy.reldatasync;
 
 import org.json.simple.JSONObject;
 import org.json.simple.parser.ParseException;

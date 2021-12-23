@@ -3,6 +3,7 @@ package org.maventy.reldatasync.android;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.maventy.reldatasync.Document;
+import org.maventy.reldatasync.JdbcDatastore;
 import org.robolectric.RobolectricTestRunner;
 
 import java.io.File;
@@ -13,6 +14,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashMap;
 import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
@@ -80,5 +82,22 @@ public class TestJdbcDataStore {
         assertEquals(last, doc.get("last"));
         assertEquals(id, doc.get(Document.ID));
         assertEquals(age, doc.get("age"));
+
+        // Put a doc into the DB
+//        final String id2 = randomUUIDString();
+//        final String first2 = "first 2";
+//        final String last2 = "last 2";
+//        final int age2 = 50;
+//        doc = new Document(
+//                new HashMap<String, Object>() {{
+//                    put(Document.ID, id2);
+//                    put("first", first2);
+//                    put("last", last2);
+//                    put("age", age2);
+//                }}
+//        );
+//        jds.put(doc);
+//        Document doc2 = jds.get(id2);
+//        assertEquals(doc, doc2);
     }
 }
