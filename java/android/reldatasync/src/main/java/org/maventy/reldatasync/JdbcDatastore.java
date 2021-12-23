@@ -12,10 +12,8 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.maventy.reldatasync.Document;
-
 // Communicate to a REST server.
-public class JdbcDatastore {
+public class JdbcDatastore implements Datastore {
     private final Connection conn;
     private final String table;
 
@@ -40,7 +38,7 @@ public class JdbcDatastore {
         return names;
     }
 
-    public Document get(String docid) throws SQLException {
+    public Document get(String docid) throws DatastoreException {
         Document doc = null;
         String sql = "SELECT * FROM " + table + " WHERE " + Document.ID + " = ?";
         try (PreparedStatement getSt = conn.prepareStatement(sql)) {
@@ -56,6 +54,8 @@ public class JdbcDatastore {
                 }
                 doc = new Document(jo);
             }
+        } catch (SQLException throwables) {
+            throw new DatastoreException(throwables);
         }
         return doc;
     }
@@ -70,7 +70,7 @@ public class JdbcDatastore {
 //
 //        return doc
     }
-    public void put(final Document doc) throws IOException {
+    public void put(final Document doc) throws DatastoreException {
 //        """Put doc under docid.
 //
 //        If no seq, give it one.
@@ -93,12 +93,12 @@ public class JdbcDatastore {
 //                tuple([doc.get(key, None) for key in self.columnnames]))
     }
 
-    public static class DocsSinceValue {
-        public int currentSequenceId;
-        public List<Document> documents;
+    @Override
+    public void delete(String docid) {
+        // TODO(dan):
     }
 
-    public DocsSinceValue getDocsSince(final int theSeq, final int num) throws IOException, ParseException {
+    public DocsSinceValue getDocsSince(final int theSeq, final int num) throws DatastoreException {
         return null;
     }
 }
