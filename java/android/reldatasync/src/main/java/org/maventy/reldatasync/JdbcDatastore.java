@@ -36,7 +36,7 @@ public class JdbcDatastore extends BaseDatastore {
         }
 
         // Init sequence_id if not present
-        // "ON CONFLICT" requires postgres 9.5+ or sqlite
+        // "OR IGNORE" is a sqlite extension (from "ON CONFLICT")
         // See https://database.guide/how-on-conflict-works-in-sqlite/
         try (PreparedStatement ps = conn.prepareStatement(
                 "INSERT OR IGNORE INTO " + SYNC_TABLE_NAME
@@ -111,7 +111,6 @@ public class JdbcDatastore extends BaseDatastore {
     }
 
     private String putStatement() {
-        // "ON CONFLICT" requires postgres 9.5+ or sqlite
         List<String> questions = new ArrayList<>();
         for (int idx = 0; idx < columnNames.size(); idx++) {
             questions.add("?");
@@ -119,6 +118,8 @@ public class JdbcDatastore extends BaseDatastore {
 
         // This version works in sqlite
         // See https://database.guide/how-on-conflict-works-in-sqlite/
+        // "OR REPLACE" is a sqlite extension (from "ON CONFLICT")
+        // https://sqlite.org/lang_conflict.html
         return String.format(
                 "INSERT OR REPLACE INTO %s (%s) VALUES (%s)",
                 tableName,
