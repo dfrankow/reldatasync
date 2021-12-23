@@ -176,6 +176,7 @@ class Datastore(Generic[ID], ABC):
     def get(self, docid: ID) -> Document:
         pass
 
+    # TODO: Should "put" be public?  Is put_if_needed the public interface?
     @abstractmethod
     def put(self, doc: Document) -> None:
         pass
