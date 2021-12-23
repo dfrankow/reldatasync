@@ -2,6 +2,7 @@ package org.maventy.reldatasync.android;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.maventy.reldatasync.Datastore;
 import org.maventy.reldatasync.Datastore.DatastoreException;
 import org.maventy.reldatasync.Document;
 import org.maventy.reldatasync.JdbcDatastore;
@@ -27,6 +28,12 @@ import static org.junit.Assert.assertTrue;
 public class TestJdbcDataStore {
     private Connection conn = null;
 
+    private void setConnection() throws IOException, SQLException {
+        try (AutoDeletingTempFile file = new AutoDeletingTempFile("tmp", ".db");) {
+            setConnection(file.getFile());
+        }
+    }
+
     private void setConnection(File file) throws SQLException {
         try {
             DriverManager.registerDriver((Driver) Class.forName("org.sqldroid.SQLDroidDriver").newInstance());
@@ -37,9 +44,9 @@ public class TestJdbcDataStore {
         this.conn = DriverManager.getConnection(jdbcUrl);
     }
 
-    private void createTable1() throws SQLException {
-        String sql = "CREATE TABLE table1 " +
-                "("+ Document.ID + " VARCHAR(32) not NULL, " +
+    private void createTable1(String tableName) throws SQLException {
+        String sql = "CREATE TABLE " + tableName +
+                " ("+ Document.ID + " VARCHAR(32) not NULL, " +
                 " " + Document.REV + " INTEGER, " +
                 " " + Document.DELETED + " BOOLEAN, " +
                 " first VARCHAR(255), " +
@@ -58,13 +65,11 @@ public class TestJdbcDataStore {
 
     @Test
     public void test1() throws IOException, SQLException, DatastoreException {
-        try (AutoDeletingTempFile file = new AutoDeletingTempFile("tmp", ".db");) {
-            setConnection(file.getFile());
-        }
-        JdbcDatastore.createSequenceIdsTable(conn);
+        setConnection();
 
         // Table created outside JdbcDatastore
-        createTable1();
+        createTable1("table1");
+        JdbcDatastore.createSequenceIdsTable(conn);
         JdbcDatastore jds = new JdbcDatastore(conn, "ds1", "table1");
         assertEquals(0, jds.getSequenceId());
 
@@ -116,5 +121,27 @@ public class TestJdbcDataStore {
 
         // returns false because it did not have to put
         assertFalse(jds.putIfNeeded(doc));
+    }
+
+    private DatastoreTester.DatastoreFactory getDatastoreFactory() {
+        return new DatastoreTester.DatastoreFactory() {
+            @Override
+            public Datastore getDatastore(String name) {
+                try {
+                    JdbcDatastore.createSequenceIdsTable(conn);
+                    createTable1(name);
+                    return new JdbcDatastore(conn, "ds" + name, name);
+                } catch (SQLException | DatastoreException throwable) {
+                    throw new RuntimeException(throwable);
+                }
+            }
+        };
+    }
+
+    @Test
+    public void testNonoverlapping() throws DatastoreException, IOException, SQLException {
+        setConnection();
+
+        new DatastoreTester(getDatastoreFactory()).testNonoverlapping();
     }
 }
