@@ -111,6 +111,6 @@ public class JdbcDatastore extends BaseDatastore {
     }
 
     public DocsSinceValue getDocsSince(final int theSeq, final int num) throws DatastoreException {
-        return null;
+        throw new DatastoreException("TODO: implement");
     }
 }
