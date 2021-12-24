@@ -140,6 +140,10 @@ class Datastore(Generic[ID], ABC):
             self.put(doc)
             ret = 1
 
+            logger.debug(
+                f"Put docid {docid} doc {doc} seq {seq} "
+                f"in {self.id} (compared to doc {my_doc} seq {my_seq})")
+
             # if this doc has a higher rev than our clock, move our clock up
             # NOTE(dan): this may be optional if we handle it at the sync level
             if seq > self.sequence_id:
