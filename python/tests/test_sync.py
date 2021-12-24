@@ -101,36 +101,43 @@ class _TestDatastore:
         self.client.put(Document({_ID: 'B', 'value': 'val2'}))
         self.client.put(Document({_ID: 'D', 'value': 'val4'}))
         # third makes object C v1
-        self.client.put(Document({_ID: 'C', 'value': 'val3'}))
-        self.client.put(Document({_ID: 'D', 'value': 'val5'}))
+        self.third.put(Document({_ID: 'C', 'value': 'val3'}))
+        self.third.put(Document({_ID: 'D', 'value': 'val5'}))
 
-        # sync server / client
-        self.server.sync_both_directions(self.client)
-        # sync server / third
-        self.server.sync_both_directions(self.third)
-        # sync server / client
-        self.server.sync_both_directions(self.client)
-        # sync server / third
-        self.server.sync_both_directions(self.third)
+        # pull server <= client
+        logger.debug("*** pull server <= client")
+        self.server.pull_changes(self.client)
+        # pull client <= third
+        logger.debug("*** pull client <= third")
+        self.client.pull_changes(self.third)
+        # pull server <= client
+        logger.debug("*** pull server <= client")
+        self.server.pull_changes(self.client)
 
-        # now client and third should have the same,
-        # even though they never synced
-        self.assertEqual(self.client.sequence_id, self.third.sequence_id)
-        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
-                         self.client.get('A'))
-        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
-                         self.client.get('B'))
-        self.assertEqual(Document({_ID: 'C', 'value': 'val3', _REV: 3}),
-                         self.client.get('C'))
-        self.assertEqual(Document({_ID: 'D', 'value': 'val5', _REV: 4}),
-                         self.client.get('D'))
-
-        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
-                         self.third.get('A'))
-        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
-                         self.third.get('B'))
-        self.assertEqual(Document({_ID: 'D', 'value': 'val5', _REV: 4}),
+        # third only has C and D, since nothing pushed to it
+        self.assertEqual(Document({_ID: 'C', 'value': 'val3', _REV: 1}),
+                         self.third.get('C'))
+        self.assertEqual(Document({_ID: 'D', 'value': 'val5', _REV: 2}),
                          self.third.get('D'))
+
+        # now server has all of third's docs even though they never synced,
+        # because server got third's changes through client
+        self.assertEqual(self.server.sequence_id, self.third.sequence_id)
+
+        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
+                         self.server.get('A'))
+        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
+                         self.server.get('B'))
+
+        self.assertEqual(Document({_ID: 'C', 'value': 'val3', _REV: 1}),
+                         self.client.get('C'))
+        # currently fails because sequence_id is used improperly to fetch
+        # changes.  server never got client's C.
+        self.assertEqual(Document({_ID: 'C', 'value': 'val3', _REV: 1}),
+                         self.server.get('C'))
+
+        self.assertEqual(Document({_ID: 'D', 'value': 'val5', _REV: 4}),
+                         self.server.get('D'))
 
     @staticmethod
     def _some_datastore_mods(datastore, items):
