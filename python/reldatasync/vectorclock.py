@@ -106,6 +106,8 @@ class VectorClock:
 
     def __str__(self):
         return json.dumps(self.clocks,
+                          # Sorting is not needed, but let's be easy on the eyes
+                          sort_keys=True,
                           # No whitespace: https://stackoverflow.com/a/16311587
                           separators=(',', ':'))
 
