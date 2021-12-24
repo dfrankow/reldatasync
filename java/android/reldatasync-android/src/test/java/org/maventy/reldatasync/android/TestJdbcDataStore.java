@@ -25,7 +25,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(RobolectricTestRunner.class)
-public class TestJdbcDataStore {
+public class TestJdbcDatastore {
     private Connection conn = null;
 
     private void setConnection() throws IOException, SQLException {
