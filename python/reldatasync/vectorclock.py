@@ -22,21 +22,23 @@ class VectorClock:
     """
 
     def __init__(self, counts):
-        """counts is a dict mapping process -> clock (numeric value)."""
-        self.counts = counts.copy()
+        """clocks is a dict mapping clock -> value (numeric value)."""
+        self.clocks = counts.copy()
 
     def set_clock(self, clock, value: int):
         # assert increasing only
-        assert clock not in self.counts or self.counts[clock] <= value
-        self.counts[clock] = value
+        old = self.clocks.get(clock, None)
+        if not (old is None or old <= value):
+            raise ValueError(f"Can't go backwards from {old} to {value}")
+        self.clocks[clock] = value
 
     def _compare(self, other) -> Union[int, None]:
-        all_keys = self.counts.keys() | other.counts.keys()
+        all_keys = self.clocks.keys() | other.clocks.keys()
 
         # if there are keys, and every element in the vector is <, then <
         comp = len(all_keys) > 0
         for key in all_keys:
-            if not (self.counts.get(key, 0) < other.counts.get(key, 0)):
+            if not (self.clocks.get(key, 0) < other.clocks.get(key, 0)):
                 comp = False
                 break
         if comp:
@@ -45,7 +47,7 @@ class VectorClock:
         # if there are keys, and every element in the vector is >, then >
         comp = len(all_keys) > 0
         for key in all_keys:
-            if not (self.counts.get(key, 0) > other.counts.get(key, 0)):
+            if not (self.clocks.get(key, 0) > other.clocks.get(key, 0)):
                 comp = False
                 break
         if comp:
@@ -54,7 +56,7 @@ class VectorClock:
         # if there are keys, and every element in the vector is ==, then ==
         comp = len(all_keys) > 0
         for key in all_keys:
-            if not (self.counts.get(key, 0) == other.counts.get(key, 0)):
+            if not (self.clocks.get(key, 0) == other.clocks.get(key, 0)):
                 comp = False
                 break
         if comp:
@@ -64,15 +66,15 @@ class VectorClock:
 
         # First, tiebreak by picking the highest clock value (to try to lean
         # towards more recency)
-        max_clock1 = max(self.counts.values())
-        max_clock2 = max(other.counts.values())
+        max_clock1 = max(self.clocks.values())
+        max_clock2 = max(other.clocks.values())
         if max_clock1 != max_clock2:
             # < is -1, > is 1
             return max_clock1 - max_clock2
 
         # Still tied.  Tiebreak by json dict hash.
-        hash1 = util.dict_hash(self.counts)
-        hash2 = util.dict_hash(other.counts)
+        hash1 = util.dict_hash(self.clocks)
+        hash2 = util.dict_hash(other.clocks)
 
         if hash1 < hash2:
             return -1
@@ -80,7 +82,7 @@ class VectorClock:
             return 1
 
         # how unlucky
-        # the counts above were not equal, but the hash is the same ?!
+        # the clocks above were not equal, but the hash is the same ?!
         raise ValueError("Unexpectedly, hashes are equal: {hash1}, {hash2}")
 
     def __eq__(self, other):
