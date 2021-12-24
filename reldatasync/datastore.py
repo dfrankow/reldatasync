@@ -172,10 +172,12 @@ class Datastore(Generic[ID], ABC):
         if seq > self.get_peer_sequence_id(peer):
             self.peer_seq_ids[peer] = seq
 
+    # TODO: Should "get" not return a doc if its _DELETED is True?
     @abstractmethod
     def get(self, docid: ID) -> Document:
         pass
 
+    # TODO: Should "put" be public?  Is put_if_needed the public interface?
     @abstractmethod
     def put(self, doc: Document) -> None:
         pass
@@ -422,9 +424,12 @@ class PostgresDatastore(Datastore):
                 raise NameError("Field '%s' not in table '%s'" % (
                     field, self.tablename))
 
-        # TODO(dan): Check self.tablename has a unique index on _id
+        # TODO: Check self.tablename has a unique index on _id
         # Required for proper functioning of Postgres UPSERT
         # See also https://stackoverflow.com/a/36799500
+
+        # TODO: Check that sequence_id in revisions table is >= max(REV)
+        #   in the data
 
         return self
 

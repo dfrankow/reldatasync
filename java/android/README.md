@@ -17,3 +17,21 @@ OR
 - run ./gradlew <task>
 
 `task` can be `tasks` to see the list of possible tasks to run.
+
+
+Testing
+-------
+
+There are some unit tests.
+
+Also, there is a TestClient that exercises some functionality.
+
+To run TestClient, first start a server:
+
+```
+source .venv/bin/activate
+export PYTHONPATH=../reldatasync
+./tests/rds_server.py
+```
+
+Then run TestClient in the IDE.
