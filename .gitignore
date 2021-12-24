@@ -1,14 +1,5 @@
+# IntelliJ files
 .idea
-.venv
-__pycache__
 
+# My tmp dirs
 tmp/
-build/
-dist/
-*.egg-info/
-
-# Download directory for setuptools
-.eggs/
-
-# I use this file to hold env vars I don't want to check in
-local-vars.sh
