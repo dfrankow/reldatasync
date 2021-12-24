@@ -5,87 +5,14 @@ from collections import OrderedDict
 import logging
 import psycopg2
 
-from typing import Sequence, TypeVar, Generic, Tuple
+from typing import Sequence, Generic, Tuple
 
-ID = TypeVar('ID')
-
-_REV = '_rev'
-_ID = '_id'
-_DELETED = '_deleted'
+from reldatasync.document import Document, _REV, _ID, _DELETED, ID_TYPE
 
 logger = logging.getLogger(__name__)
 
 
-class Document(dict):
-    def __init__(self, *arg, **kw):
-        super(Document, self).__init__(*arg, **kw)
-        assert _ID in self
-
-    @staticmethod
-    def _compare_vals(one, two) -> int:
-        # comparisons have to happen in the right order to respect None
-        if one is None and two is None:
-            return 0
-        elif one is None and two is not None:
-            return -1
-        elif one is not None and two is None:
-            return 1
-        elif one < two:
-            return -1
-        elif one > two:
-            return 1
-        else:
-            return 0
-
-    def _compare(self, other) -> int:
-        """Return -1 if self < other, 0 if equal, 1 if self > other or other is None."""
-        # compare keys
-        if other is None or len(self) > len(other):
-            return 1
-        elif len(self) < len(other):
-            return -1
-        else:
-            # same number of keys, now compare them
-            keys1 = sorted(self.keys())
-            keys2 = sorted(other.keys())
-            for idx in range(len(keys1)):
-                keycmp = Document._compare_vals(keys1[idx], keys2[idx])
-                if keycmp != 0:
-                    return keycmp
-
-            # keys were all the same, now compare values
-            for idx in range(len(self)):
-                valcmp = Document._compare_vals(
-                    self[keys1[idx]], other[keys2[idx]])
-                if valcmp != 0:
-                    return valcmp
-
-            # everything was equal
-            return 0
-
-    def __eq__(self, other):
-        return self._compare(other) == 0
-
-    def __ne__(self, other):
-        return self._compare(other) != 0
-
-    def __lt__(self, other):
-        return self._compare(other) < 0
-
-    def __le__(self, other):
-        return self._compare(other) != 1
-
-    def __gt__(self, other):
-        return self._compare(other) > 0
-
-    def __ge__(self, other):
-        return self._compare(other) != -1
-
-    def copy(self):
-        return Document(super().copy())
-
-
-class Datastore(Generic[ID], ABC):
+class Datastore(Generic[ID_TYPE], ABC):
     def __init__(self, datastore_id: str):
         self.id = datastore_id
         self._sequence_id = 0
@@ -154,7 +81,7 @@ class Datastore(Generic[ID], ABC):
                           docid, doc, seq, my_doc, my_seq))
         return ret
 
-    def delete(self, docid: ID) -> None:
+    def delete(self, docid: ID_TYPE) -> None:
         """Delete an doc in the datastore.
 
         Returns silently if the doc is not in the datastore.
@@ -178,7 +105,7 @@ class Datastore(Generic[ID], ABC):
 
     # TODO: Should "get" not return a doc if its _DELETED is True?
     @abstractmethod
-    def get(self, docid: ID) -> Document:
+    def get(self, docid: ID_TYPE) -> Document:
         pass
 
     # TODO: Should "put" be public?  Is put_if_needed the public interface?
@@ -345,7 +272,7 @@ class MemoryDatastore(Datastore):
         super().__init__(datastore_id)
         self.datastore = OrderedDict()
 
-    def get(self, docid: ID) -> Document:
+    def get(self, docid: ID_TYPE) -> Document:
         """Return doc, or None if not present."""
         doc = self.datastore.get(docid, None)
         # Return a copy so our internals cannot be modified
@@ -463,7 +390,7 @@ class PostgresDatastore(Datastore):
         assert self._sequence_id == new_val, (
                 'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
 
-    def get(self, docid: ID) -> Document:
+    def get(self, docid: ID_TYPE) -> Document:
         """Return doc, or None if not present."""
         doc = None
         self.cursor.execute(

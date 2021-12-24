@@ -4,7 +4,8 @@ import argparse
 import requests
 from typing import Sequence, Tuple, Dict
 
-from reldatasync.datastore import Datastore, MemoryDatastore, ID, Document
+from reldatasync.datastore import Datastore, MemoryDatastore
+from reldatasync.document import Document, ID_TYPE
 
 
 class RestClientSourceDatastore(Datastore):
@@ -14,7 +15,7 @@ class RestClientSourceDatastore(Datastore):
         self.table = table
         self.baseurl = baseurl
 
-    def get(self, docid: ID) -> Document:
+    def get(self, docid: ID_TYPE) -> Document:
         resp = requests.get(
             self._server_url(self.table + '/doc/' + docid))
         ret = None

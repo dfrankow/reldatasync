@@ -46,7 +46,7 @@ or directly:
 
 ```bash
 $ docker-compose up
-$ docker-compose run data_sync nosetests tests/test_sync.py
+$ docker-compose run data_sync nosetests tests/test_datastore.py
 ```
 
 You shouldn't have to give the "test_sync.py", but
