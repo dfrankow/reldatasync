@@ -1,3 +1,4 @@
+import json
 from typing import Union
 
 from reldatasync import util
@@ -103,3 +104,12 @@ class VectorClock:
     def __ge__(self, other):
         return self._compare(other) != -1
 
+    def __str__(self):
+        return json.dumps(self.clocks,
+                          # No whitespace: https://stackoverflow.com/a/16311587
+                          separators=(',', ':'))
+
+    @staticmethod
+    def from_string(string):
+        # NOTE: check this is a valid string?
+        return VectorClock(json.loads(string))

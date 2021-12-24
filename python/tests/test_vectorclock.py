@@ -50,3 +50,12 @@ class TestVectorClock(unittest.TestCase):
         # can't go backwards
         with self.assertRaises(ValueError):
             vca1.set_clock('A', 1)
+
+    def test_str(self):
+        vc = VectorClock({'A': 1, 'B': 3})
+        str_rep = '{"A":1,"B":3}'
+        # to string
+        self.assertEqual(str_rep, str(vc))
+
+        # from string
+        self.assertEqual(vc, VectorClock.from_string(str_rep))
