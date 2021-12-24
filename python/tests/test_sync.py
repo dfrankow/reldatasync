@@ -23,6 +23,7 @@ class _TestDatastore:
     def setUp(self):
         self.server = None
         self.client = None
+        self.third = None
 
     def test_nonoverlapping(self):
         """Non-overlapping documents from datastore"""
@@ -89,6 +90,48 @@ class _TestDatastore:
         self.assertEqual(Document({_ID: 'C', 'value': 'val4', _REV: 2}),
                          self.server.get('C'))
 
+    def test_three_servers(self):
+        # If we have three servers A, B, C
+        # and A syncs with B, B with C, but A never syncs with C
+        # we should still have all three servers agree
+        # server makes object A v1
+        self.server.put(Document({_ID: 'A', 'value': 'val1'}))
+        self.server.put(Document({_ID: 'D', 'value': 'val3'}))
+        # client makes object B v1
+        self.client.put(Document({_ID: 'B', 'value': 'val2'}))
+        self.client.put(Document({_ID: 'D', 'value': 'val4'}))
+        # third makes object C v1
+        self.client.put(Document({_ID: 'C', 'value': 'val3'}))
+        self.client.put(Document({_ID: 'D', 'value': 'val5'}))
+
+        # sync server / client
+        self.server.sync_both_directions(self.client)
+        # sync server / third
+        self.server.sync_both_directions(self.third)
+        # sync server / client
+        self.server.sync_both_directions(self.client)
+        # sync server / third
+        self.server.sync_both_directions(self.third)
+
+        # now client and third should have the same,
+        # even though they never synced
+        self.assertEqual(self.client.sequence_id, self.third.sequence_id)
+        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
+                         self.client.get('A'))
+        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
+                         self.client.get('B'))
+        self.assertEqual(Document({_ID: 'C', 'value': 'val3', _REV: 3}),
+                         self.client.get('C'))
+        self.assertEqual(Document({_ID: 'D', 'value': 'val5', _REV: 4}),
+                         self.client.get('D'))
+
+        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
+                         self.third.get('A'))
+        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
+                         self.third.get('B'))
+        self.assertEqual(Document({_ID: 'D', 'value': 'val5', _REV: 4}),
+                         self.third.get('D'))
+
     @staticmethod
     def _some_datastore_mods(datastore, items):
         num_steps = random.randint(2, 30)
@@ -145,6 +188,7 @@ class TestMemoryDatastore(_TestDatastore, unittest.TestCase):
         super().setUp()
         self.server = MemoryDatastore('server')
         self.client = MemoryDatastore('client')
+        self.third = MemoryDatastore('third')
 
 
 def _dbconnstr(dbname=None):
@@ -264,17 +308,24 @@ def _create_databases(cls, same_db):
         cls.client_connstr = _dbconnstr(cls.client_dbname)
         _create_test_db(cls.client_dbname)
 
+    cls.third_dbname = 'test_third'
+    cls.third_connstr = _dbconnstr(cls.third_dbname)
+    _create_test_db(cls.third_dbname)
+
 
 def _drop_databases(cls, same_db):
     _drop_db(cls.server_dbname)
     if not same_db:
         _drop_db(cls.client_dbname)
+    _drop_db(cls.third_dbname)
 
 
 class TestPostgresDatastore(_TestDatastore, unittest.TestCase):
     client_connstr = None
     server_connstr = None
-    # SAME_DB: if True, put two tables in one DB; else put one table in two DBs.
+    third_connstr = None
+    # SAME_DB: if True, put server/client tables in one DB;
+    # else put one table in two DBs.
     SAME_DB = True
 
     @classmethod
@@ -292,6 +343,7 @@ class TestPostgresDatastore(_TestDatastore, unittest.TestCase):
         # Clear tables for server and client
         _clear_tables(TestPostgresDatastore.server_dbname)
         _clear_tables(TestPostgresDatastore.client_dbname)
+        _clear_tables(TestPostgresDatastore.third_dbname)
 
         self.server = PostgresDatastore(
             'server', TestPostgresDatastore.server_connstr, 'docs1')
@@ -299,10 +351,14 @@ class TestPostgresDatastore(_TestDatastore, unittest.TestCase):
         self.client = PostgresDatastore(
             'client', TestPostgresDatastore.client_connstr, 'docs2')
         self.client.__enter__()
+        self.third = PostgresDatastore(
+            'third', TestPostgresDatastore.third_connstr, 'docs1')
+        self.third.__enter__()
 
     def tearDown(self) -> None:
         self.server.__exit__()
         self.client.__exit__()
+        self.third.__exit__()
 
 
 class TestDocument(unittest.TestCase):
