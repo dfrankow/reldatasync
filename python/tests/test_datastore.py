@@ -44,25 +44,25 @@ class _TestDatastore(unittest.TestCase):
         # client
         self.assertEqual(
             Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({'server': 1})),
+                      _REV: str(VectorClock({self.server.id: 1})),
                       # A got put in client after B
                       _SEQ: 2}),
             self.client.get('A'))
         self.assertEqual(
             Document({_ID: 'B', 'value': 'val2',
-                      _REV: str(VectorClock({'client': 1})),
+                      _REV: str(VectorClock({self.client.id: 1})),
                       _SEQ: 1}),
             self.client.get('B'))
 
         # server
         self.assertEqual(
             Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({'server': 1})),
+                      _REV: str(VectorClock({self.server.id: 1})),
                       _SEQ: 1}),
             self.server.get('A'))
         self.assertEqual(
             Document({_ID: 'B', 'value': 'val2',
-                      _REV: str(VectorClock({'client': 1})),
+                      _REV: str(VectorClock({self.client.id: 1})),
                       # B got put in server after A
                       _SEQ: 2}),
             self.server.get('B'))
@@ -179,7 +179,8 @@ class _TestDatastore(unittest.TestCase):
                 datastore.delete(item)
             else:
                 val = random.randint(0, 1000)
-                datastore.put(Document({_ID: item, 'value': val}))
+                datastore.put(
+                    Document({_ID: item, 'value': val}), increment_rev=True)
 
     def test_long_streaks(self):
         items = ['a', 'b', 'c', 'd', 'e']
@@ -201,7 +202,7 @@ class _TestDatastore(unittest.TestCase):
 
     def test_copy(self):
         doc = Document({_ID: 'A', 'value': 'val1'})
-        self.server.put(doc)
+        self.server.put(doc, increment_rev=True)
         doc['another'] = 'foo'
         doc2 = self.server.get('A')
         self.assertTrue('another' not in doc2)
@@ -209,7 +210,7 @@ class _TestDatastore(unittest.TestCase):
 
     def test_delete(self):
         doc = Document({_ID: 'A', 'value': 'val1'})
-        self.server.put(doc)
+        self.server.put(doc, increment_rev=True)
         doc1 = self.server.get('A')
         self.assertTrue(doc1)
         self.server.delete('A')
@@ -309,16 +310,15 @@ def _create_test_tables(dbname):
             'datastore_id text not null, sequence_id int not null')
         # docs1 only needed on server, and docs2 on client
         # but it's easier to just create both tables on both
-        _create_table_if_not_exists(
-            dbname,
-            'docs1',
-            '_id text UNIQUE not null, _rev int not null,'
-            ' value text, _deleted bool')
-        _create_table_if_not_exists(
-            dbname,
-            'docs2',
-            '_id text UNIQUE not null, _rev int not null,'
-            ' value text, _deleted bool')
+        docs_def = """
+            _id text UNIQUE not null,
+            _rev varchar(255) not null,
+            _seq int not null,
+            _deleted bool,
+            value text
+        """
+        _create_table_if_not_exists(dbname, 'docs1', docs_def)
+        _create_table_if_not_exists(dbname, 'docs2', docs_def)
     exec_sql(exec_func, dbname=dbname)
 
 

@@ -43,7 +43,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         """Set increment_rev revision for a doc.
 
         Return new sequence id."""
-        rev = VectorClock(doc.get(_REV, "{}"))
+        rev = VectorClock.from_string(doc.get(_REV, "{}"))
         rev.set_clock(self.id, seq_id)
         doc[_REV] = str(rev)
 
@@ -108,11 +108,13 @@ class Datastore(Generic[ID_TYPE], ABC):
         Returns silently if the doc is not in the datastore.
         """
         doc = self.get(docid)
+        assert _REV in doc
         if doc and not doc.get(_DELETED, False):
             doc[_DELETED] = True
             # Deletion makes a increment_rev rev
-            self._increment_sequence_id()
-            doc[_REV] = self._sequence_id
+            seq_id = self._increment_sequence_id()
+            doc[_SEQ] = seq_id
+            self._set_new_rev(doc, seq_id)
             self._put(doc)
 
     def get_peer_sequence_id(self, peer: str) -> int:
@@ -461,7 +463,7 @@ class PostgresDatastore(Datastore):
         allow syncing in chunks.
         """
         self.cursor.execute(
-            "SELECT * FROM %s WHERE %%s < _rev AND _rev <= %%s"
+            "SELECT * FROM %s WHERE %%s < _seq AND _seq <= %%s"
             % self.tablename, (the_seq, the_seq + num))
         docs = [self._row_to_doc(docrow) for docrow in self.cursor.fetchall()]
         return self.sequence_id, docs
