@@ -7,7 +7,8 @@ import psycopg2
 
 from typing import Sequence, Generic, Tuple
 
-from reldatasync.document import Document, _REV, _ID, _DELETED, ID_TYPE
+from reldatasync.document import Document, _REV, _ID, _DELETED, ID_TYPE, _SEQ
+from reldatasync.vectorclock import VectorClock
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,10 @@ class Datastore(Generic[ID_TYPE], ABC):
     def __exit__(self, *args):
         pass
 
-    def _increment_sequence_id(self) -> None:
+    def _increment_sequence_id(self) -> int:
         self._sequence_id += 1
+        logger.debug(f"Increment self._sequence_id to {self._sequence_id}")
+        return self._sequence_id
 
     def _set_sequence_id(self, the_id) -> None:
         assert the_id >= self._sequence_id
@@ -36,49 +39,67 @@ class Datastore(Generic[ID_TYPE], ABC):
         """Read-only sequence_id"""
         return self._sequence_id
 
-    def _pre_put(self, doc) -> Document:
-        # copy doc so we don't modify caller's doc
-        doc = doc.copy()
+    def _set_new_rev(self, doc: Document, seq_id: int) -> None:
+        """Set increment_rev revision for a doc.
 
-        if doc.get(_REV, None) is None:
-            self._increment_sequence_id()
-            doc[_REV] = self._sequence_id
+        Return new sequence id."""
+        rev = VectorClock(doc.get(_REV, "{}"))
+        rev.set_clock(self.id, seq_id)
+        doc[_REV] = str(rev)
 
-        return doc
-
-    def put_if_needed(self, doc: Document) -> int:
-        """Put doc under docid if seq is greater
+    def put(self, doc: Document, increment_rev=False) -> int:
+        """Put doc under docid if rev is greater, or doc doesn't currently exist
 
         Return number of records actually put (0 or 1).
 
-        As a side effect, this updates self.sequence_id if doc[_REV] is larger.
+        As a side effect, this updates self.sequence_id if doc is put.
+
+        :param doc  Document to put
+        :param increment_rev  If True, increment revision.  If revision is
+                              not present, it adds one.
         """
+        if not increment_rev and _REV not in doc:
+            raise ValueError(f"doc must have {_REV}")
+
+        # copy doc so we don't modify caller's doc
+        doc = doc.copy()
+
         ret = 0
         docid = doc[_ID]
-        # If there is no revision, treat it like rev 0
-        seq = doc.get(_REV, 0)
+
+        rev_str = doc.get(_REV, None)
+        if increment_rev:
+            if rev_str is None:
+                rev_str = '{}'
+            rev = VectorClock.from_string(rev_str)
+            # the new rev below would be >= to this:
+            rev.set_clock(self.id, self.sequence_id+1)
+        else:
+            # we threw a ValueError above if it was None
+            assert rev_str is not None
+            rev = VectorClock.from_string(rev_str)
+
         my_doc = self.get(docid, include_deleted=True)
-        assert my_doc is None or _REV in my_doc, 'my_doc should have _REV'
-        my_seq = my_doc.get(_REV, None) if my_doc else None
-        # If my doc is older, or equal time but smaller
-        if (my_seq is None) or (my_seq < seq) or (
-                my_seq == seq and (my_doc < doc)):
-            assert my_seq is None or my_seq <= seq
-            self.put(doc)
+
+        my_rev = VectorClock.from_string(my_doc.get(_REV)) if my_doc else None
+        if (my_rev is None) or (my_rev < rev):
+            seq_id = self._increment_sequence_id()
+            if increment_rev:
+                # Now assign the rev for real
+                # Maybe sequence id changed since we looked above, get the real one
+                rev.set_clock(self.id, seq_id)
+                doc[_REV] = str(rev)
+            doc[_SEQ] = seq_id
+            self._put(doc)
             ret = 1
 
             logger.debug(
-                f"Put docid {docid} doc {doc} seq {seq} "
-                f"in {self.id} (compared to doc {my_doc} seq {my_seq})")
-
-            # if this doc has a higher rev than our clock, move our clock up
-            # NOTE(dan): this may be optional if we handle it at the sync level
-            if seq > self.sequence_id:
-                self._set_sequence_id(seq)
+                f"Put docid {docid} doc {doc} seq {rev} "
+                f"in {self.id} (compared to doc {my_doc} seq {my_rev})")
         else:
             logger.debug("Ignore docid %s doc %s seq %s "
                          "(compared to doc %s seq %s)" % (
-                          docid, doc, seq, my_doc, my_seq))
+                          docid, doc, rev, my_doc, my_rev))
         return ret
 
     def delete(self, docid: ID_TYPE) -> None:
@@ -89,17 +110,17 @@ class Datastore(Generic[ID_TYPE], ABC):
         doc = self.get(docid)
         if doc and not doc.get(_DELETED, False):
             doc[_DELETED] = True
-            # Deletion makes a new rev
+            # Deletion makes a increment_rev rev
             self._increment_sequence_id()
             doc[_REV] = self._sequence_id
-            self.put(doc)
+            self._put(doc)
 
     def get_peer_sequence_id(self, peer: str) -> int:
         """Get the seq we have for peer, or zero if we have none."""
         return self.peer_seq_ids.get(peer, 0)
 
     def set_peer_sequence_id(self, peer: str, seq: int) -> None:
-        """Set new peer sequence id, if seq > what we have."""
+        """Set increment_rev peer sequence id, if seq > what we have."""
         if seq > self.get_peer_sequence_id(peer):
             self.peer_seq_ids[peer] = seq
 
@@ -107,9 +128,8 @@ class Datastore(Generic[ID_TYPE], ABC):
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         pass
 
-    # TODO: Should "put" be public?  Is put_if_needed the public interface?
     @abstractmethod
-    def put(self, doc: Document) -> None:
+    def _put(self, doc: Document) -> None:
         pass
 
     @abstractmethod
@@ -159,19 +179,19 @@ class Datastore(Generic[ID_TYPE], ABC):
             source_seq_id, docs = source.get_docs_since(
                 new_peer_seq_id, chunk_size)
             for doc in docs:
-                docs_changed += destination.put_if_needed(doc)
+                docs_changed += destination.put(doc)
 
             # destination seq_id is at least as big as the docs we put in
             assert (len(docs) == 0 or
-                    destination.sequence_id >= max([doc['_rev'] for doc in docs]))
+                    destination.sequence_id >= max([doc[_SEQ] for doc in docs]))
 
             # If we got all docs to (new_peer_seq_id+chunk_size), then either
             # we stepped forward to that, or to the latest the source had
             new_peer_seq_id = min(source_seq_id, new_peer_seq_id+chunk_size)
 
-        # source_seq_id is at least as new as the docs that came over
+        # source_seq_id is at least as increment_rev as the docs that came over
         assert source_seq_id >= new_peer_seq_id, (
-            'source seq %d new peer seq %d' % (
+            'source seq %d increment_rev peer seq %d' % (
              source.sequence_id, new_peer_seq_id))
 
         # we moved forward, or there were no updates
@@ -286,12 +306,9 @@ class MemoryDatastore(Datastore):
                 doc = None
         return doc
 
-    def put(self, doc: Document) -> None:
-        """Put doc under docid.
-
-        If no seq, give it one.
-        """
-        doc = self._pre_put(doc)
+    def _put(self, doc: Document) -> None:
+        """Put doc under docid."""
+        assert _REV in doc
         docid = doc[_ID]
         self.datastore[docid] = doc
         # preserve doc key order
@@ -308,11 +325,13 @@ class MemoryDatastore(Datastore):
         """
         docs = []
         for docid, doc in self.datastore.items():
-            if the_seq < doc[_REV] <= (the_seq + num):
+            doc_seq = doc[_SEQ]
+            assert doc_seq is not None
+            if the_seq < doc_seq <= (the_seq + num):
                 docs.append(doc)
             # Since self.datastore is ordered, we can cut out early
             # This is optional, perhaps premature optimization
-            if doc[_REV] > (the_seq + num):
+            if doc_seq > (the_seq + num):
                 break
         return self.sequence_id, docs
 
@@ -412,12 +431,12 @@ class PostgresDatastore(Datastore):
                 doc = None
         return doc
 
-    def put(self, doc: Document) -> None:
+    def _put(self, doc: Document) -> None:
         """Put doc under docid.
 
         If no seq, give it one.
         """
-        doc = self._pre_put(doc)
+        assert _REV in doc
 
         # "ON CONFLICT" requires postgres 9.5+
         set_statement = ', '.join("%s=EXCLUDED.%s " % (col, col)
@@ -447,7 +466,7 @@ class PostgresDatastore(Datastore):
         docs = [self._row_to_doc(docrow) for docrow in self.cursor.fetchall()]
         return self.sequence_id, docs
 
-    def _increment_sequence_id(self) -> None:
+    def _increment_sequence_id(self) -> int:
         self.cursor.execute(
             "UPDATE data_sync_revisions set sequence_id = sequence_id+1"
             " WHERE datastore_id=%s"
@@ -456,3 +475,4 @@ class PostgresDatastore(Datastore):
         super()._increment_sequence_id()
         assert self._sequence_id == new_val, (
                 'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+        return new_val

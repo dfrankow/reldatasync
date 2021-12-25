@@ -7,7 +7,8 @@ import unittest
 
 from reldatasync.datastore import (
     MemoryDatastore, PostgresDatastore)
-from reldatasync.document import Document, _REV, _ID
+from reldatasync.document import Document, _REV, _ID, _SEQ
+from reldatasync.vectorclock import VectorClock
 
 logger = logging.getLogger(__name__)
 
@@ -31,41 +32,67 @@ class _TestDatastore(unittest.TestCase):
     def test_nonoverlapping(self):
         """Non-overlapping documents from datastore"""
         # server makes object A v1
-        self.server.put(Document({_ID: 'A', 'value': 'val1'}))
+        self.server.put(
+            Document({_ID: 'A', 'value': 'val1'}), increment_rev=True)
         # client makes object B v1
-        self.client.put(Document({_ID: 'B', 'value': 'val2'}))
+        self.client.put(
+            Document({_ID: 'B', 'value': 'val2'}), increment_rev=True)
 
         # sync leaves both server and client with A val1, B val2
         self.client.sync_both_directions(self.server)
 
-        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
-                         self.client.get('A'))
-        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
-                         self.client.get('B'))
+        # client
+        self.assertEqual(
+            Document({_ID: 'A', 'value': 'val1',
+                      _REV: str(VectorClock({'server': 1})),
+                      # A got put in client after B
+                      _SEQ: 2}),
+            self.client.get('A'))
+        self.assertEqual(
+            Document({_ID: 'B', 'value': 'val2',
+                      _REV: str(VectorClock({'client': 1})),
+                      _SEQ: 1}),
+            self.client.get('B'))
 
-        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
-                         self.server.get('A'))
-        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
-                         self.server.get('B'))
+        # server
+        self.assertEqual(
+            Document({_ID: 'A', 'value': 'val1',
+                      _REV: str(VectorClock({'server': 1})),
+                      _SEQ: 1}),
+            self.server.get('A'))
+        self.assertEqual(
+            Document({_ID: 'B', 'value': 'val2',
+                      _REV: str(VectorClock({'client': 1})),
+                      # B got put in server after A
+                      _SEQ: 2}),
+            self.server.get('B'))
 
         # counter is at the highest existing doc version
         server_seq, server_docs = self.server.get_docs_since(0, 1000)
         self.assertEqual(self.server.sequence_id, server_seq)
         self.assertEqual(self.server.sequence_id,
-                         max(doc[_REV] for doc in server_docs))
+                         max(doc[_SEQ] for doc in server_docs))
 
         client_seq, client_docs = self.client.get_docs_since(0, 1000)
         self.assertEqual(self.client.sequence_id, client_seq)
         self.assertEqual(self.client.sequence_id,
-                         max(doc[_REV] for doc in client_docs))
+                         max(doc[_SEQ] for doc in client_docs))
 
     def test_put_if_needed(self):
         """put_if_needed doesn't put a second time"""
         doc = Document({_ID: 'A', 'value': 'val1'})
         # put the doc
-        self.assertEqual(1, self.server.put_if_needed(doc))
-        # doc is already present
-        self.assertEqual(0, self.server.put_if_needed(doc))
+        self.assertEqual(1, self.server.put(doc, increment_rev=True))
+        # get doc back out with its _REV set
+        doc = self.server.get('A')
+        # doc is already present, so it's not put again
+        self.assertEqual(0, self.server.put(doc))
+
+        # doc is already present, but we said we changed it, so it's put
+        doc['value'] = 'val2'
+        self.assertEqual(1, self.server.put(doc, increment_rev=True))
+        doc = self.server.get('A')
+        self.assertEqual('val2', doc['value'])
 
     def test_overlapping_sync(self):
         """Overlapping documents from datastore"""

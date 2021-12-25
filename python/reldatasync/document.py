@@ -1,8 +1,14 @@
 from typing import TypeVar
 
+# _REV is a vector clock of revisions from every process that changed the doc
 _REV = '_rev'
+# _SEQ is a sequence number local to a datastore that says when it was inserted
+_SEQ = '_seq'
+# _ID is a globally unique identifier
 _ID = '_id'
+# _DELETED is True if the doc has been deleted
 _DELETED = '_deleted'
+
 ID_TYPE = TypeVar('ID_TYPE')
 
 
@@ -71,5 +77,5 @@ class Document(dict):
     def __ge__(self, other):
         return self._compare(other) != -1
 
-    def copy(self):
+    def copy(self) -> 'Document':
         return Document(super().copy())
