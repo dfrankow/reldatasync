@@ -26,7 +26,7 @@ class VectorClock:
         """clocks is a dict mapping clock -> value (numeric value)."""
         self.clocks = counts.copy()
 
-    def set_clock(self, clock, value: int):
+    def set_clock(self, clock, value: int) -> None:
         # assert increasing only
         old = self.clocks.get(clock, None)
         if not (old is None or old <= value):
@@ -86,25 +86,25 @@ class VectorClock:
         # the clocks above were not equal, but the hash is the same ?!
         raise ValueError("Unexpectedly, hashes are equal: {hash1}, {hash2}")
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return self._compare(other) == 0
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         return self._compare(other) != 0
 
-    def __lt__(self, other):
+    def __lt__(self, other) -> bool:
         return self._compare(other) < 0
 
-    def __le__(self, other):
+    def __le__(self, other) -> bool:
         return self._compare(other) != 1
 
-    def __gt__(self, other):
+    def __gt__(self, other) -> bool:
         return self._compare(other) > 0
 
-    def __ge__(self, other):
+    def __ge__(self, other) -> bool:
         return self._compare(other) != -1
 
-    def __str__(self):
+    def __str__(self) -> str:
         return json.dumps(self.clocks,
                           # Sorting is not needed, but let's be easy on the eyes
                           sort_keys=True,
@@ -112,6 +112,6 @@ class VectorClock:
                           separators=(',', ':'))
 
     @staticmethod
-    def from_string(string):
+    def from_string(string) -> 'VectorClock':
         # NOTE: check this is a valid string?
         return VectorClock(json.loads(string))
