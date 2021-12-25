@@ -181,9 +181,14 @@ class _TestDatastore:
         doc = Document({_ID: 'A', 'value': 'val1'})
         self.server.put(doc)
         doc1 = self.server.get('A')
-        self.assertTrue(self.server.get('A'))
+        self.assertTrue(doc1)
         self.server.delete('A')
-        doc2 = self.server.get('A')
+
+        # get doesn't return deleted doc by default
+        self.assertIsNone(self.server.get('A'))
+
+        # get returns deleted doc if asked
+        doc2 = self.server.get('A', include_deleted=True)
         self.assertEqual(True, doc2['_deleted'])
         self.assertGreater(doc2[_REV], doc1[_REV])
 

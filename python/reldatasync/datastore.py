@@ -57,7 +57,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         docid = doc[_ID]
         # If there is no revision, treat it like rev 0
         seq = doc.get(_REV, 0)
-        my_doc = self.get(docid)
+        my_doc = self.get(docid, include_deleted=True)
         assert my_doc is None or _REV in my_doc, 'my_doc should have _REV'
         my_seq = my_doc.get(_REV, None) if my_doc else None
         # If my doc is older, or equal time but smaller
@@ -103,9 +103,8 @@ class Datastore(Generic[ID_TYPE], ABC):
         if seq > self.get_peer_sequence_id(peer):
             self.peer_seq_ids[peer] = seq
 
-    # TODO: Should "get" not return a doc if its _DELETED is True?
     @abstractmethod
-    def get(self, docid: ID_TYPE) -> Document:
+    def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         pass
 
     # TODO: Should "put" be public?  Is put_if_needed the public interface?
@@ -272,12 +271,19 @@ class MemoryDatastore(Datastore):
         super().__init__(datastore_id)
         self.datastore = OrderedDict()
 
-    def get(self, docid: ID_TYPE) -> Document:
-        """Return doc, or None if not present."""
+    def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
+        """Return doc, or None if not present.
+
+        :param docid  Doc id
+        :param include_deleted  If True, don't return deleted item"""
         doc = self.datastore.get(docid, None)
-        # Return a copy so our internals cannot be modified
         if doc:
+            # Return a copy so our internals cannot be modified
             doc = doc.copy()
+            # don't include deleted docs
+            if doc.get(_DELETED, False) and not include_deleted:
+                logger.debug(f"Don't return deleted doc {doc}")
+                doc = None
         return doc
 
     def put(self, doc: Document) -> None:
@@ -390,9 +396,10 @@ class PostgresDatastore(Datastore):
         assert self._sequence_id == new_val, (
                 'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
 
-    def get(self, docid: ID_TYPE) -> Document:
+    def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         """Return doc, or None if not present."""
         doc = None
+        # TODO: Use include_deleted in the query
         self.cursor.execute(
             "SELECT * FROM %s WHERE _id=%%s" % self.tablename, (docid,))
         docrow = self.cursor.fetchone()
@@ -400,6 +407,9 @@ class PostgresDatastore(Datastore):
             doc = self._row_to_doc(docrow)
             # assert there was only one result
             assert self.cursor.fetchone() is None, 'docid was %s' % docid
+            # Don't include deleted doc
+            if doc.get(_DELETED, False) and not include_deleted:
+                doc = None
         return doc
 
     def put(self, doc: Document) -> None:
