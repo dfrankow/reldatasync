@@ -184,8 +184,6 @@ class _TestDatastore:
         self.assertTrue(self.server.get('A'))
         self.server.delete('A')
         doc2 = self.server.get('A')
-        import logging
-        logging.info("doc2 %s" % doc2)
         self.assertEqual(True, doc2['_deleted'])
         self.assertGreater(doc2[_REV], doc1[_REV])
 
