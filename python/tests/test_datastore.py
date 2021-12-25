@@ -113,17 +113,17 @@ class _TestDatastore(unittest.TestCase):
         # client
         self.assertEqual(
             Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({"server": 1})),
+                      _REV: str(VectorClock({self.server.id: 1})),
                       _SEQ: 3}),
             self.client.get('A'))
         self.assertEqual(
             Document({_ID: 'B', 'value': 'val2',
-                      _REV: str(VectorClock({"client": 1})),
+                      _REV: str(VectorClock({self.client.id: 1})),
                       _SEQ: 1}),
             self.client.get('B'))
         self.assertEqual(
             Document({_ID: 'C', 'value': 'val4',
-                      _REV: str(VectorClock({"client": 2})),
+                      _REV: str(VectorClock({self.client.id: 2})),
                       # client ignores server's change, so _SEQ is still 2
                       _SEQ: 2}),
             self.client.get('C'))
@@ -131,18 +131,18 @@ class _TestDatastore(unittest.TestCase):
         # server
         self.assertEqual(
             Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({"server": 1})),
+                      _REV: str(VectorClock({self.server.id: 1})),
                       _SEQ: 1}),
             self.server.get('A'))
         self.assertEqual(
             Document({_ID: 'B', 'value': 'val2',
-                      _REV: str(VectorClock({"client": 1})),
+                      _REV: str(VectorClock({self.client.id: 1})),
                       _SEQ: 3}),
             self.server.get('B'))
         self.assertEqual(
             Document({_ID: 'C', 'value': 'val4',
                       # server get's client's change
-                      _REV: str(VectorClock({"client": 2})),
+                      _REV: str(VectorClock({self.client.id: 2})),
                       _SEQ: 4}),
             self.server.get('C'))
 
@@ -151,14 +151,20 @@ class _TestDatastore(unittest.TestCase):
         # and A syncs with B, B with C, but A never syncs with C
         # we should still have all three servers agree
         # server makes object A v1
-        self.server.put(Document({_ID: 'A', 'value': 'val1'}))
-        self.server.put(Document({_ID: 'D', 'value': 'val3'}))
+        self.server.put(
+            Document({_ID: 'A', 'value': 'val1'}), increment_rev=True)
+        self.server.put(
+            Document({_ID: 'D', 'value': 'val3'}), increment_rev=True)
         # client makes object B v1
-        self.client.put(Document({_ID: 'B', 'value': 'val2'}))
-        self.client.put(Document({_ID: 'D', 'value': 'val4'}))
+        self.client.put(
+            Document({_ID: 'B', 'value': 'val2'}), increment_rev=True)
+        self.client.put(
+            Document({_ID: 'D', 'value': 'val4'}), increment_rev=True)
         # third makes object C v1
-        self.third.put(Document({_ID: 'C', 'value': 'val3'}))
-        self.third.put(Document({_ID: 'D', 'value': 'val5'}))
+        self.third.put(
+            Document({_ID: 'C', 'value': 'val3'}), increment_rev=True)
+        self.third.put(
+            Document({_ID: 'D', 'value': 'val5'}), increment_rev=True)
 
         # pull server <= client
         logger.debug("*** pull server <= client")
@@ -171,29 +177,52 @@ class _TestDatastore(unittest.TestCase):
         self.server.pull_changes(self.client)
 
         # third only has C and D, since nothing pushed to it
-        self.assertEqual(Document({_ID: 'C', 'value': 'val3', _REV: 1}),
+        self.assertEqual(
+            Document({_ID: 'C', 'value': 'val3',
+                      _REV: str(VectorClock({self.third.id: 1})),
+                      _SEQ: 1}),
                          self.third.get('C'))
-        self.assertEqual(Document({_ID: 'D', 'value': 'val5', _REV: 2}),
+        self.assertEqual(
+            Document({_ID: 'D', 'value': 'val5',
+                      _REV: str(VectorClock({self.third.id: 2})),
+                      _SEQ: 2}),
                          self.third.get('D'))
 
         # now server has all of third's docs even though they never synced,
         # because server got third's changes through client
-        self.assertEqual(self.server.sequence_id, self.third.sequence_id)
+        for item in ('A', 'B', 'C', 'D'):
+            self.assertTrue(self.server.get(item))
 
-        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
-                         self.server.get('A'))
-        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
-                         self.server.get('B'))
+        # server
+        self.assertEqual(
+            Document({_ID: 'A', 'value': 'val1',
+                      _REV: str(VectorClock({self.server.id: 1})),
+                      _SEQ: 1}),
+            self.server.get('A'))
+        self.assertEqual(
+            Document({_ID: 'B', 'value': 'val2',
+                      _REV: str(VectorClock({self.client.id: 1})),
+                      _SEQ: 3}),
+            self.server.get('B'))
+        # This only succeeds if C traveled from third to client to server!
+        self.assertEqual(
+            Document({_ID: 'C', 'value': 'val3',
+                      _REV: str(VectorClock({self.third.id: 1})),
+                      _SEQ: 5}),
+            self.server.get('C'))
+        # third's D wins
+        self.assertEqual(
+            Document({_ID: 'D', 'value': 'val5',
+                      _REV: str(VectorClock({self.third.id: 2})),
+                      _SEQ: 6}),
+            self.server.get('D'))
 
-        self.assertEqual(Document({_ID: 'C', 'value': 'val3', _REV: 1}),
-                         self.client.get('C'))
-        # currently fails because sequence_id is used improperly to fetch
-        # changes.  server never got client's C.
-        self.assertEqual(Document({_ID: 'C', 'value': 'val3', _REV: 1}),
-                         self.server.get('C'))
-
-        self.assertEqual(Document({_ID: 'D', 'value': 'val5', _REV: 4}),
-                         self.server.get('D'))
+        # client also has C
+        self.assertEqual(
+            Document({_ID: 'C', 'value': 'val3',
+                      _REV: str(VectorClock({self.third.id: 1})),
+                      _SEQ: 3}),
+            self.client.get('C'))
 
     @staticmethod
     def _some_datastore_mods(datastore, items):
