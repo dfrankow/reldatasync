@@ -15,15 +15,18 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=os.getenv('LOG_LEVEL', 'WARNING'))
 
 
-# Tests starting with underscore are ignored
-# See also https://stackoverflow.com/a/50380006
-class _TestDatastore:
+class _TestDatastore(unittest.TestCase):
     """Base class for testing datastores."""
 
     def setUp(self):
         self.server = None
         self.client = None
         self.third = None
+
+        if self.__class__ == _TestDatastore:
+            # Skipping here allows us to derive _TestDatastore from TestCase
+            # See also https://stackoverflow.com/a/35304339
+            self.skipTest("Skip base class test (_TestDatastore)")
 
     def test_nonoverlapping(self):
         """Non-overlapping documents from datastore"""
@@ -193,7 +196,7 @@ class _TestDatastore:
         self.assertGreater(doc2[_REV], doc1[_REV])
 
 
-class TestMemoryDatastore(_TestDatastore, unittest.TestCase):
+class TestMemoryDatastore(_TestDatastore):
     def setUp(self):
         super().setUp()
         self.server = MemoryDatastore('server')
@@ -330,7 +333,7 @@ def _drop_databases(cls, same_db):
     _drop_db(cls.third_dbname)
 
 
-class TestPostgresDatastore(_TestDatastore, unittest.TestCase):
+class TestPostgresDatastore(_TestDatastore):
     client_connstr = None
     server_connstr = None
     third_connstr = None
