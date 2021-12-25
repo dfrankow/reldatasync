@@ -57,6 +57,8 @@ class TestVectorClock(unittest.TestCase):
     def test_empty_vectorclock(self):
         # empty is < any set clock
         ve = VectorClock({})
+        self.assertEqual("{}", str(ve))
+
         va = VectorClock({'A': 1})
         self.assertFalse(ve == va)
         self.assertTrue(ve != va)
@@ -73,3 +75,6 @@ class TestVectorClock(unittest.TestCase):
 
         # from string
         self.assertEqual(vc, VectorClock.from_string(str_rep))
+
+        # from empty string
+        self.assertEqual(VectorClock({}), VectorClock.from_string("{}"))
