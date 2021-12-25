@@ -70,8 +70,10 @@ class VectorClock:
 
         # First, tiebreak by picking the highest clock value (to try to lean
         # towards more recency)
-        max_clock1 = max(self.clocks.values())
-        max_clock2 = max(other.clocks.values())
+        vals1 = self.clocks.values()
+        max_clock1 = max(vals1) if vals1 else None
+        vals2 = other.clocks.values()
+        max_clock2 = max(vals2) if vals2 else None
         if max_clock1 != max_clock2:
             # < is -1, > is 1
             return max_clock1 - max_clock2
@@ -85,9 +87,7 @@ class VectorClock:
         elif hash1 > hash2:
             return 1
 
-        # how unlucky
-        # the clocks above were not equal, but the hash is the same ?!
-        raise ValueError("Unexpectedly, hashes are equal: {hash1}, {hash2}")
+        return 0
 
     def __eq__(self, other) -> bool:
         return self._compare(other) == 0
