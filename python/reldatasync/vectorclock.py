@@ -33,6 +33,9 @@ class VectorClock:
             raise ValueError(f"Can't go backwards from {old} to {value}")
         self.clocks[clock] = value
 
+    def get_clock(self, clock, default=None) -> int:
+        return self.clocks.get(clock, default)
+
     def _compare(self, other) -> Union[int, None]:
         all_keys = self.clocks.keys() | other.clocks.keys()
 

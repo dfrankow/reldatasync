@@ -35,10 +35,12 @@ class TestVectorClock(unittest.TestCase):
         self.assertFalse(vca1 > vcb2)
         self.assertFalse(vca1 >= vcb2)
 
-    def test_setclock(self):
+    def test_setgetclock(self):
         vca1 = VectorClock({})
         vca1.set_clock('A', 1)
         self.assertEqual(1, vca1.clocks['A'])
+        self.assertEqual(1, vca1.get_clock('A'))
+        self.assertIsNone(vca1.get_clock('nope'))
 
         vca2 = VectorClock({})
         vca2.set_clock('A', 1)
@@ -47,6 +49,7 @@ class TestVectorClock(unittest.TestCase):
 
         # can go forwards
         vca1.set_clock('A', 2)
+        self.assertEqual(2, vca1.get_clock('A'))
         # can't go backwards
         with self.assertRaises(ValueError):
             vca1.set_clock('A', 1)
