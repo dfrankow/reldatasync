@@ -97,28 +97,54 @@ class _TestDatastore(unittest.TestCase):
     def test_overlapping_sync(self):
         """Overlapping documents from datastore"""
         # server makes object A v1
-        self.server.put(Document({_ID: 'A', 'value': 'val1'}))
-        self.server.put(Document({_ID: 'C', 'value': 'val3'}))
+        self.server.put(
+            Document({_ID: 'A', 'value': 'val1'}), increment_rev=True)
+        self.server.put(
+            Document({_ID: 'C', 'value': 'val3'}), increment_rev=True)
         # client makes object B v1
-        self.client.put(Document({_ID: 'B', 'value': 'val2'}))
-        self.client.put(Document({_ID: 'C', 'value': 'val4'}))
+        self.client.put(
+            Document({_ID: 'B', 'value': 'val2'}), increment_rev=True)
+        self.client.put(
+            Document({_ID: 'C', 'value': 'val4'}), increment_rev=True)
 
         # sync leaves both server and client with A val1,  B val2, C val4
         self.client.sync_both_directions(self.server)
 
-        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
-                         self.client.get('A'))
-        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
-                         self.client.get('B'))
-        self.assertEqual(Document({_ID: 'C', 'value': 'val4', _REV: 2}),
-                         self.client.get('C'))
+        # client
+        self.assertEqual(
+            Document({_ID: 'A', 'value': 'val1',
+                      _REV: str(VectorClock({"server": 1})),
+                      _SEQ: 3}),
+            self.client.get('A'))
+        self.assertEqual(
+            Document({_ID: 'B', 'value': 'val2',
+                      _REV: str(VectorClock({"client": 1})),
+                      _SEQ: 1}),
+            self.client.get('B'))
+        self.assertEqual(
+            Document({_ID: 'C', 'value': 'val4',
+                      _REV: str(VectorClock({"client": 2})),
+                      # client ignores server's change, so _SEQ is still 2
+                      _SEQ: 2}),
+            self.client.get('C'))
 
-        self.assertEqual(Document({_ID: 'A', 'value': 'val1', _REV: 1}),
-                         self.server.get('A'))
-        self.assertEqual(Document({_ID: 'B', 'value': 'val2', _REV: 1}),
-                         self.server.get('B'))
-        self.assertEqual(Document({_ID: 'C', 'value': 'val4', _REV: 2}),
-                         self.server.get('C'))
+        # server
+        self.assertEqual(
+            Document({_ID: 'A', 'value': 'val1',
+                      _REV: str(VectorClock({"server": 1})),
+                      _SEQ: 1}),
+            self.server.get('A'))
+        self.assertEqual(
+            Document({_ID: 'B', 'value': 'val2',
+                      _REV: str(VectorClock({"client": 1})),
+                      _SEQ: 3}),
+            self.server.get('B'))
+        self.assertEqual(
+            Document({_ID: 'C', 'value': 'val4',
+                      # server get's client's change
+                      _REV: str(VectorClock({"client": 2})),
+                      _SEQ: 4}),
+            self.server.get('C'))
 
     def test_three_servers(self):
         # If we have three servers A, B, C

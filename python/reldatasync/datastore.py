@@ -27,7 +27,8 @@ class Datastore(Generic[ID_TYPE], ABC):
 
     def _increment_sequence_id(self) -> int:
         self._sequence_id += 1
-        logger.debug(f"Increment self._sequence_id to {self._sequence_id}")
+        logger.debug(
+            f"{self.id}: Increment self._sequence_id to {self._sequence_id}")
         return self._sequence_id
 
     def _set_sequence_id(self, the_id) -> None:
@@ -59,7 +60,7 @@ class Datastore(Generic[ID_TYPE], ABC):
                               not present, it adds one.
         """
         if not increment_rev and _REV not in doc:
-            raise ValueError(f"doc must have {_REV}")
+            raise ValueError(f"doc must have {_REV} if increment_rev is False")
 
         # copy doc so we don't modify caller's doc
         doc = doc.copy()
@@ -108,7 +109,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         Returns silently if the doc is not in the datastore.
         """
         doc = self.get(docid)
-        assert _REV in doc
+        assert doc is None or _REV in doc
         if doc and not doc.get(_DELETED, False):
             doc[_DELETED] = True
             # Deletion makes a increment_rev rev
@@ -183,9 +184,12 @@ class Datastore(Generic[ID_TYPE], ABC):
             for doc in docs:
                 docs_changed += destination.put(doc)
 
-            # destination seq_id is at least as big as the docs we put in
-            assert (len(docs) == 0 or
-                    destination.sequence_id >= max([doc[_SEQ] for doc in docs]))
+            # This used to be true, but now it's not.  If the destination
+            # ignores some things, then its sequence_id may not rise.
+            #
+            # "destination seq_id is at least as big as the docs we put in"
+            # assert (len(docs) == 0 or
+            #         destination.sequence_id >= max([doc[_SEQ] for doc in docs]))
 
             # If we got all docs to (new_peer_seq_id+chunk_size), then either
             # we stepped forward to that, or to the latest the source had
@@ -258,23 +262,29 @@ class Datastore(Generic[ID_TYPE], ABC):
         #   dest  : 3*      source: 3*
 
         # 1. source -> destination
-        logger.debug("************ push changes from source to destination")
+        logger.debug(
+            f"******* push changes from {self.id} to {destination.id}")
         self.push_changes(destination, chunk_size=chunk_size)
         # 2. destination -> source
-        logger.debug("************ pull changes from destination to source")
+        logger.debug(
+            f"******* pull changes from {destination.id} to {self.id}")
         self.pull_changes(destination, chunk_size=chunk_size)
         # 3. push source seq -> destination seq
-        logger.debug("************ push changes from source to destination 2")
+        logger.debug(
+            f"******* push changes from {self.id} to {destination.id} 2")
         # source.set_peer_sequence_id(destination.id, destination.sequence_id)
         final_changes = self.push_changes(destination, chunk_size=chunk_size)
 
         # Since nothing else changed, only the sequence # was synchronized
         assert final_changes == 0, 'actually had %d changes' % final_changes
 
+        # This is no longer true.  Their clocks may not be synchronized if
+        # changes are ignored (and the sequence_id doesn't go up).
         # now their "clocks" are synchronized
-        assert destination.sequence_id == self.sequence_id, (
-            "server.sequence_id %d client.sequence_id %s" %
-            (destination.sequence_id, self.sequence_id))
+        # assert destination.sequence_id == self.sequence_id, (
+        #     "server.sequence_id %d client.sequence_id %s" %
+        #     (destination.sequence_id, self.sequence_id))
+
         # now they know about each others' clocks
         assert destination.get_peer_sequence_id(self.id) == self.sequence_id, (
             'server thinks client seq is %d, client thinks seq is %d' % (
