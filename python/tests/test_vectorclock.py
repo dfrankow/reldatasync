@@ -51,6 +51,17 @@ class TestVectorClock(unittest.TestCase):
         with self.assertRaises(ValueError):
             vca1.set_clock('A', 1)
 
+    def test_empty_vectorclock(self):
+        # empty is < any set clock
+        ve = VectorClock({})
+        va = VectorClock({'A': 1})
+        self.assertFalse(ve == va)
+        self.assertTrue(ve != va)
+        self.assertTrue(ve < va)
+        self.assertTrue(ve <= va)
+        self.assertFalse(ve > va)
+        self.assertFalse(ve >= va)
+
     def test_str(self):
         vc = VectorClock({'A': 1, 'B': 3, 'a': 10})
         str_rep = '{"A":1,"B":3,"a":10}'
