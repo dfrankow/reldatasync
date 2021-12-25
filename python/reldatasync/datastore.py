@@ -351,7 +351,7 @@ class MemoryDatastore(Datastore):
 class PostgresDatastore(Datastore):
     def __init__(self, datastore_id: str, conn_str: str,
                  tablename: str):
-        super().__init__('%s.%s' % (datastore_id, tablename))
+        super().__init__(datastore_id)
         self.tablename = tablename
         self.conn_str = conn_str
 
