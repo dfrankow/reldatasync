@@ -8,7 +8,7 @@ import unittest
 
 from reldatasync.datastore import (
     MemoryDatastore, PostgresDatastore)
-from reldatasync.document import Document, _REV, _ID, _SEQ
+from reldatasync.document import Document, _REV, _ID, _SEQ, _DELETED
 from reldatasync.vectorclock import VectorClock
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,29 @@ class _TestDatastore(unittest.TestCase):
             # See also https://stackoverflow.com/a/35304339
             self.skipTest("Skip base class test (_TestDatastore)")
 
-    def test_nonoverlapping(self):
+    def assert_equals_no_seq(self, ds1, ds2):
+        """Compare two datastores, ignoring the _SEQ key.
+
+        _SEQ is local to a datastore, it can differ due to 'last write wins'."""
+        _, docs1 = ds1.get_docs_since(0, 1000)
+        _, docs2 = ds2.get_docs_since(0, 1000)
+
+        self.assertEqual(len(docs1), len(docs2))
+
+        def compare_no_seq(a, b):
+            return a.compare(b, ignore_keys={_SEQ})
+
+        docs1 = sorted(docs1, key=functools.cmp_to_key(compare_no_seq))
+        docs2 = sorted(docs2, key=functools.cmp_to_key(compare_no_seq))
+        # debug logging:
+        # for idx in range(len(docs1)):
+        #     logger.debug(f"docs1[{idx}]={docs1[idx]}\ndocs2[{idx}]={docs2[idx]}\n")
+        for idx in range(len(docs1)):
+            self.assertEqual(
+                0, docs1[idx].compare(docs2[idx], ignore_keys={_SEQ}),
+                f"docs_c[{idx}]={docs1[idx]}\ndocs_s[{idx}]={docs2[idx]}")
+
+    def test_nonoverlapping_sync(self):
         """Non-overlapping documents from datastore"""
         # server makes object A v1
         self.server.put(
@@ -41,6 +63,9 @@ class _TestDatastore(unittest.TestCase):
 
         # sync leaves both server and client with A val1, B val2
         self.client.sync_both_directions(self.server)
+
+        # server and client should now contain the same stuff
+        self.assert_equals_no_seq(self.client, self.server)
 
         # client
         self.assertEqual(
@@ -111,6 +136,9 @@ class _TestDatastore(unittest.TestCase):
         # sync leaves both server and client with A val1,  B val2, C val4
         self.client.sync_both_directions(self.server)
 
+        # server and client should now contain the same stuff
+        self.assert_equals_no_seq(self.client, self.server)
+
         # client
         self.assertEqual(
             Document({_ID: 'A', 'value': 'val1',
@@ -174,7 +202,7 @@ class _TestDatastore(unittest.TestCase):
             self.server.get_docs_since(0, 10))
 
     def test_delete_sync(self):
-        """Overlapping documents from datastore"""
+        """Test that deletes get through syncing"""
         # server makes object A v1
         self.server.put(
             Document({_ID: 'A', 'value': 'val1'}), increment_rev=True)
@@ -193,12 +221,16 @@ class _TestDatastore(unittest.TestCase):
         # sync leaves both server and client with the same stuff
         self.client.sync_both_directions(self.server)
 
+        # server and client should now contain the same stuff
+        self.assert_equals_no_seq(self.client, self.server)
+
         # client
         self.assertEqual(
             Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({self.server.id: 1})),
-                      _SEQ: 3}),
-            self.client.get('A'))
+                      _REV: str(VectorClock({self.server.id: 3})),
+                      _SEQ: 4,
+                      _DELETED: True}),
+            self.client.get('A', include_deleted=True))
         self.assertEqual(
             Document({_ID: 'B', 'value': 'val2',
                       _REV: str(VectorClock({self.client.id: 1})),
@@ -206,28 +238,31 @@ class _TestDatastore(unittest.TestCase):
             self.client.get('B'))
         self.assertEqual(
             Document({_ID: 'C', 'value': 'val4',
-                      _REV: str(VectorClock({self.client.id: 2})),
+                      _REV: str(VectorClock({self.client.id: 3})),
                       # client ignores server's change, so _SEQ is still 2
-                      _SEQ: 2}),
-            self.client.get('C'))
+                      _SEQ: 3,
+                      _DELETED: True}),
+            self.client.get('C', include_deleted=True))
 
         # server
         self.assertEqual(
             Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({self.server.id: 1})),
-                      _SEQ: 1}),
-            self.server.get('A'))
+                      _REV: str(VectorClock({self.server.id: 3})),
+                      _SEQ: 3,
+                      _DELETED: True}),
+            self.server.get('A', include_deleted=True))
         self.assertEqual(
             Document({_ID: 'B', 'value': 'val2',
                       _REV: str(VectorClock({self.client.id: 1})),
-                      _SEQ: 3}),
+                      _SEQ: 4}),
             self.server.get('B'))
         self.assertEqual(
             Document({_ID: 'C', 'value': 'val4',
                       # server get's client's change
-                      _REV: str(VectorClock({self.client.id: 2})),
-                      _SEQ: 4}),
-            self.server.get('C'))
+                      _REV: str(VectorClock({self.client.id: 3})),
+                      _SEQ: 5,
+                      _DELETED: True}),
+            self.server.get('C', include_deleted=True))
 
     def test_three_servers(self):
         # If we have three servers A, B, C
@@ -333,25 +368,7 @@ class _TestDatastore(unittest.TestCase):
             self.client.sync_both_directions(self.server, chunk_size=2)
 
             # server and client should now contain the same stuff
-            _, docs_c = self.client.get_docs_since(0, 1000)
-            _, docs_s = self.server.get_docs_since(0, 1000)
-
-            # Test equality while ignoring the _SEQ field, which is local
-            # to a datastore, and may be different if puts were
-            # ignored due to "last write wins"
-            self.assertEqual(len(docs_c), len(docs_s))
-
-            def compare_no_seq(a, b):
-                return a.compare(b, ignore_keys={_SEQ})
-            docs_c = sorted(docs_c, key=functools.cmp_to_key(compare_no_seq))
-            docs_s = sorted(docs_s, key=functools.cmp_to_key(compare_no_seq))
-            # debug logging:
-            # for idx in range(len(docs_c)):
-            #     logger.debug(f"docs_c[{idx}]={docs_c[idx]}\ndocs_s[{idx}]={docs_s[idx]}\n")
-            for idx in range(len(docs_c)):
-                self.assertEqual(
-                    0, docs_c[idx].compare(docs_s[idx], ignore_keys={_SEQ}),
-                    f"docs_c[{idx}]={docs_c[idx]}\ndocs_s[{idx}]={docs_s[idx]}")
+            self.assert_equals_no_seq(self.client, self.server)
 
     def test_copy(self):
         doc = Document({_ID: 'A', 'value': 'val1'})
