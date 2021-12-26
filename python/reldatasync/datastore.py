@@ -313,7 +313,7 @@ class MemoryDatastore(Datastore):
             # Return a copy so our internals cannot be modified
             doc = doc.copy()
             # don't include deleted docs
-            if doc.get(_DELETED, False) and not include_deleted:
+            if not include_deleted and doc.get(_DELETED, False):
                 logger.debug(f"Don't return deleted doc {doc}")
                 doc = None
         return doc

@@ -263,6 +263,9 @@ class _TestDatastore(unittest.TestCase):
                 return a.compare(b, ignore_keys={_SEQ})
             docs_c = sorted(docs_c, key=functools.cmp_to_key(compare_no_seq))
             docs_s = sorted(docs_s, key=functools.cmp_to_key(compare_no_seq))
+            # debug logging:
+            # for idx in range(len(docs_c)):
+            #     logger.debug(f"docs_c[{idx}]={docs_c[idx]}\ndocs_s[{idx}]={docs_s[idx]}\n")
             for idx in range(len(docs_c)):
                 self.assertEqual(
                     0, docs_c[idx].compare(docs_s[idx], ignore_keys={_SEQ}),
