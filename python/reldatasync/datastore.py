@@ -95,8 +95,8 @@ class Datastore(Generic[ID_TYPE], ABC):
             ret = 1
 
             logger.debug(
-                f"Put docid {docid} doc {doc} seq {rev} "
-                f"in {self.id} (compared to doc {my_doc} seq {my_rev})")
+                f"{self.id}: Put docid {docid} doc {doc} seq {rev} "
+                f" (compared to doc {my_doc} seq {my_rev})")
         else:
             logger.debug("Ignore docid %s doc %s seq %s "
                          "(compared to doc %s seq %s)" % (
@@ -116,6 +116,7 @@ class Datastore(Generic[ID_TYPE], ABC):
             seq_id = self._increment_sequence_id()
             doc[_SEQ] = seq_id
             self._set_new_rev(doc, seq_id)
+            logger.debug(f"{self.id}: after delete {doc}")
             self._put(doc)
 
     def get_peer_sequence_id(self, peer: str) -> int:
