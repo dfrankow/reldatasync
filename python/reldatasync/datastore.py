@@ -89,7 +89,8 @@ class Datastore(Generic[ID_TYPE], ABC):
                 # Now assign the rev for real
                 # Maybe sequence id changed since we looked above, get the real one
                 rev.set_clock(self.id, seq_id)
-                assert _REV not in doc or rev > doc[_REV], (
+                assert (_REV not in doc
+                        or rev > VectorClock.from_string(doc[_REV])), (
                         "rev did not increase: {rev} !> {doc[_REV]} ")
                 doc[_REV] = str(rev)
             doc[_SEQ] = seq_id
