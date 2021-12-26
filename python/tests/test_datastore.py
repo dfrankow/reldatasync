@@ -45,8 +45,8 @@ class _TestDatastore(unittest.TestCase):
         docs1 = sorted(docs1, key=functools.cmp_to_key(compare_no_seq))
         docs2 = sorted(docs2, key=functools.cmp_to_key(compare_no_seq))
         # debug logging:
-        # for idx in range(len(docs1)):
-        #     logger.debug(f"docs1[{idx}]={docs1[idx]}\ndocs2[{idx}]={docs2[idx]}\n")
+        for idx in range(len(docs1)):
+            logger.debug(f"docs1[{idx}]={docs1[idx]}\ndocs2[{idx}]={docs2[idx]}\n")
         for idx in range(len(docs1)):
             self.assertEqual(
                 0, docs1[idx].compare(docs2[idx], ignore_keys={_SEQ}),
@@ -264,6 +264,28 @@ class _TestDatastore(unittest.TestCase):
                       _DELETED: True}),
             self.server.get('C', include_deleted=True))
 
+    def test_delete_sync2(self):
+        """Test a particular case that failed previously."""
+
+        # Put items into server that will be ignored on client
+        # a is in last, to have a higher sequence number than server will
+        for item_name in ['i1', 'a']:
+            self.client.put(
+                Document({_ID: item_name, 'value': 820}), increment_rev=True)
+            self.client.put(
+                Document({_ID: item_name, 'value': 716}), increment_rev=True)
+
+        # sync leaves both server and client with a
+        self.client.sync_both_directions(self.server)
+        self.assert_equals_no_seq(self.client, self.server)
+
+        # delete on server
+        self.server.delete('a')
+
+        # sync leaves both server and client with deleted a
+        self.client.sync_both_directions(self.server)
+        self.assert_equals_no_seq(self.client, self.server)
+
     def test_three_servers(self):
         # If we have three servers A, B, C
         # and A syncs with B, B with C, but A never syncs with C
@@ -358,7 +380,7 @@ class _TestDatastore(unittest.TestCase):
     def test_long_streaks(self):
         items = ['a', 'b', 'c', 'd', 'e']
 
-        for jdx in range(4):
+        for jdx in range(32):
             # some mods for server, then client
             _TestDatastore._some_datastore_mods(self.server, items)
             _TestDatastore._some_datastore_mods(self.client, items)
