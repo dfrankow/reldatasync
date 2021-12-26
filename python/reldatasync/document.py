@@ -1,4 +1,4 @@
-from typing import TypeVar
+from typing import TypeVar, List
 
 # _REV is a vector clock of revisions from every process that changed the doc
 _REV = '_rev'
@@ -33,26 +33,40 @@ class Document(dict):
         else:
             return 0
 
-    def _compare(self, other) -> int:
-        """Return -1 if self < other, 0 if equal, 1 if self > other or other is None."""
+    def compare(self, other: 'Document', ignore_keys: List[str] = None) -> int:
+        """Return -1 if self < other, 0 if equal, 1 if self > other or other is None.
+
+        Compare keys and values.
+
+        :param other  Document to which to compare
+        :param ignore_keys  Ignore these keys when comparing"""
+        keys = set(self.keys())
+        if ignore_keys:
+            keys = keys.difference(ignore_keys)
+        keys = sorted(keys)
+
+        other_keys = set(other.keys()) if other else None
+        if other_keys:
+            if ignore_keys:
+                other_keys = other_keys.difference(ignore_keys)
+            other_keys = sorted(other_keys)
+
         # compare keys
-        if other is None or len(self) > len(other):
+        if other is None or len(keys) > len(other_keys):
             return 1
-        elif len(self) < len(other):
+        elif len(keys) < len(other_keys):
             return -1
         else:
             # same number of keys, now compare them
-            keys1 = sorted(self.keys())
-            keys2 = sorted(other.keys())
-            for idx in range(len(keys1)):
-                keycmp = Document._compare_vals(keys1[idx], keys2[idx])
+            for idx in range(len(keys)):
+                keycmp = Document._compare_vals(keys[idx], other_keys[idx])
                 if keycmp != 0:
                     return keycmp
 
             # keys were all the same, now compare values
-            for idx in range(len(self)):
+            for idx in range(len(keys)):
                 valcmp = Document._compare_vals(
-                    self[keys1[idx]], other[keys2[idx]])
+                    self[keys[idx]], other[other_keys[idx]])
                 if valcmp != 0:
                     return valcmp
 
@@ -60,22 +74,22 @@ class Document(dict):
             return 0
 
     def __eq__(self, other):
-        return self._compare(other) == 0
+        return self.compare(other) == 0
 
     def __ne__(self, other):
-        return self._compare(other) != 0
+        return self.compare(other) != 0
 
     def __lt__(self, other):
-        return self._compare(other) < 0
+        return self.compare(other) < 0
 
     def __le__(self, other):
-        return self._compare(other) != 1
+        return self.compare(other) != 1
 
     def __gt__(self, other):
-        return self._compare(other) > 0
+        return self.compare(other) > 0
 
     def __ge__(self, other):
-        return self._compare(other) != -1
+        return self.compare(other) != -1
 
     def copy(self) -> 'Document':
         return Document(super().copy())
