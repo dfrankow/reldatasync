@@ -60,8 +60,6 @@ class TestVectorClock(unittest.TestCase):
         vc2 = VectorClock({"client": 2, "server": 1})
         self.assertEqual(-1, vc1._compare(vc2))
 
-        # TODO: random cases testing that adding an element makes rev go up
-
     def test_setgetclock(self):
         vca1 = VectorClock({})
         vca1.set_clock('A', 1)
