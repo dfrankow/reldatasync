@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import random
@@ -253,7 +254,19 @@ class _TestDatastore(unittest.TestCase):
             _, docs_c = self.client.get_docs_since(0, 1000)
             _, docs_s = self.server.get_docs_since(0, 1000)
 
-            self.assertEqual(sorted(docs_c), sorted(docs_s))
+            # Test equality while ignoring the _SEQ field, which is local
+            # to a datastore, and may be different if puts were
+            # ignored due to "last write wins"
+            self.assertEqual(len(docs_c), len(docs_s))
+
+            def compare_no_seq(a, b):
+                return a.compare(b, ignore_keys={_SEQ})
+            docs_c = sorted(docs_c, key=functools.cmp_to_key(compare_no_seq))
+            docs_s = sorted(docs_s, key=functools.cmp_to_key(compare_no_seq))
+            for idx in range(len(docs_c)):
+                self.assertEqual(
+                    0, docs_c[idx].compare(docs_s[idx], ignore_keys={_SEQ}),
+                    f"docs_c[{idx}]={docs_c[idx]}\ndocs_s[{idx}]={docs_s[idx]}")
 
     def test_copy(self):
         doc = Document({_ID: 'A', 'value': 'val1'})
