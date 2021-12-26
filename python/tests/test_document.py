@@ -17,9 +17,9 @@ class TestDocument(unittest.TestCase):
         doc3 = doc.copy()
         doc3['other_key'] = 4
         self.assertNotEqual(doc, doc3)
-        self.assertEqual(-1, doc.compare(doc3, ignore_keys=['nonexistent']))
-        self.assertEqual(-1, doc.compare(doc3, ignore_keys=['value']))
-        self.assertEqual(0, doc.compare(doc3, ignore_keys=['other_key']))
+        self.assertEqual(-1, doc.compare(doc3, ignore_keys={'nonexistent'}))
+        self.assertEqual(-1, doc.compare(doc3, ignore_keys={'value'}))
+        self.assertEqual(0, doc.compare(doc3, ignore_keys={'other_key'}))
 
     def test_none(self):
         doc1 = Document({_ID: 'A', 'value': 'val1'})

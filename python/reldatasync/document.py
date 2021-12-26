@@ -1,4 +1,4 @@
-from typing import TypeVar, List
+from typing import TypeVar, Set
 
 # _REV is a vector clock of revisions from every process that changed the doc
 _REV = '_rev'
@@ -33,7 +33,7 @@ class Document(dict):
         else:
             return 0
 
-    def compare(self, other: 'Document', ignore_keys: List[str] = None) -> int:
+    def compare(self, other: 'Document', ignore_keys: Set[str] = None) -> int:
         """Return -1 if self < other, 0 if equal, 1 if self > other or other is None.
 
         Compare keys and values.
