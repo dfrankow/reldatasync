@@ -147,6 +147,88 @@ class _TestDatastore(unittest.TestCase):
                       _SEQ: 4}),
             self.server.get('C'))
 
+    def test_get_docs_since(self):
+        self.server.put(
+            Document({_ID: 'A', 'value': 'val1'}), increment_rev=True)
+        self.server.put(
+            Document({_ID: 'C', 'value': 'val3'}), increment_rev=True)
+        doca = self.server.get('A')
+        docc = self.server.get('C')
+        # since 0 returns all the docs, in order
+        current_seq = 2
+        self.assertEqual(
+            (current_seq, [doca, docc]),
+            self.server.get_docs_since(0, 10))
+        # since 1 doesn't return doca
+        self.assertEqual(
+            (current_seq, [docc]),
+            self.server.get_docs_since(1, 10))
+
+        # get_docs_since returns deleted docs
+        self.server.delete('A')
+        doca = self.server.get('A', include_deleted=True)
+        current_seq = 3
+        self.assertEqual(
+            # order switched (docc first), since deleting A increased version
+            (current_seq, [docc, doca]),
+            self.server.get_docs_since(0, 10))
+
+    def test_delete_sync(self):
+        """Overlapping documents from datastore"""
+        # server makes object A v1
+        self.server.put(
+            Document({_ID: 'A', 'value': 'val1'}), increment_rev=True)
+        self.server.put(
+            Document({_ID: 'C', 'value': 'val3'}), increment_rev=True)
+        # client makes object B v1
+        self.client.put(
+            Document({_ID: 'B', 'value': 'val2'}), increment_rev=True)
+        self.client.put(
+            Document({_ID: 'C', 'value': 'val4'}), increment_rev=True)
+
+        # delete some
+        self.server.delete('A')
+        self.client.delete('C')
+
+        # sync leaves both server and client with the same stuff
+        self.client.sync_both_directions(self.server)
+
+        # client
+        self.assertEqual(
+            Document({_ID: 'A', 'value': 'val1',
+                      _REV: str(VectorClock({self.server.id: 1})),
+                      _SEQ: 3}),
+            self.client.get('A'))
+        self.assertEqual(
+            Document({_ID: 'B', 'value': 'val2',
+                      _REV: str(VectorClock({self.client.id: 1})),
+                      _SEQ: 1}),
+            self.client.get('B'))
+        self.assertEqual(
+            Document({_ID: 'C', 'value': 'val4',
+                      _REV: str(VectorClock({self.client.id: 2})),
+                      # client ignores server's change, so _SEQ is still 2
+                      _SEQ: 2}),
+            self.client.get('C'))
+
+        # server
+        self.assertEqual(
+            Document({_ID: 'A', 'value': 'val1',
+                      _REV: str(VectorClock({self.server.id: 1})),
+                      _SEQ: 1}),
+            self.server.get('A'))
+        self.assertEqual(
+            Document({_ID: 'B', 'value': 'val2',
+                      _REV: str(VectorClock({self.client.id: 1})),
+                      _SEQ: 3}),
+            self.server.get('B'))
+        self.assertEqual(
+            Document({_ID: 'C', 'value': 'val4',
+                      # server get's client's change
+                      _REV: str(VectorClock({self.client.id: 2})),
+                      _SEQ: 4}),
+            self.server.get('C'))
+
     def test_three_servers(self):
         # If we have three servers A, B, C
         # and A syncs with B, B with C, but A never syncs with C
