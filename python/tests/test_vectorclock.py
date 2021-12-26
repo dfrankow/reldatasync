@@ -6,8 +6,19 @@ from reldatasync.vectorclock import VectorClock
 class TestVectorClock(unittest.TestCase):
     def test_compare(self):
         vca1 = VectorClock({'A': 1})
+        # self-comparison
         self.assertEqual(vca1, vca1)
+        self.assertEqual(0, vca1._compare(vca1))
+        self.assertFalse(vca1.__gt__(vca1))
+        self.assertTrue(vca1.__ge__(vca1))
+        self.assertFalse(vca1.__lt__(vca1))
+        self.assertTrue(vca1.__le__(vca1))
 
+        # None comparison
+        with self.assertRaises(AttributeError):
+            self.assertEqual(vca1, None)
+
+        # Compare to greater clock
         vca2 = VectorClock({'A': 2})
         self.assertNotEqual(vca1, vca2)
         self.assertLess(vca1, vca2)
@@ -40,6 +51,14 @@ class TestVectorClock(unittest.TestCase):
         vcc = VectorClock({"client": 44})
         vcs = VectorClock({"client": 44, "server": 38})
         self.assertEqual(-1, vcc._compare(vcs))
+
+        # TODO: random cases testing that adding an element makes rev go up
+
+    def test_compare_indeterminate(self):
+        # adding an element makes rev go up
+        vc1 = VectorClock({"client": 1, "server": 2})
+        vc2 = VectorClock({"client": 2, "server": 1})
+        self.assertEqual(-1, vc1._compare(vc2))
 
         # TODO: random cases testing that adding an element makes rev go up
 

@@ -39,24 +39,6 @@ class VectorClock:
     def _compare(self, other) -> Union[int, None]:
         all_keys = self.clocks.keys() | other.clocks.keys()
 
-        # if there are keys, and every element in the vector is <, then <
-        comp = len(all_keys) > 0
-        for key in all_keys:
-            if not (self.clocks.get(key, 0) < other.clocks.get(key, 0)):
-                comp = False
-                break
-        if comp:
-            return -1
-
-        # if there are keys, and every element in the vector is >, then >
-        comp = len(all_keys) > 0
-        for key in all_keys:
-            if not (self.clocks.get(key, 0) > other.clocks.get(key, 0)):
-                comp = False
-                break
-        if comp:
-            return 1
-
         # if there are keys, and every element in the vector is ==, then ==
         comp = len(all_keys) > 0
         for key in all_keys:
@@ -65,6 +47,36 @@ class VectorClock:
                 break
         if comp:
             return 0
+
+        # if there are keys, and every element in the vector is <=, and at
+        # least one is <, then <
+        all_le = True
+        some_lt = False
+        for key in all_keys:
+            val = self.clocks.get(key, 0)
+            other_val = other.clocks.get(key, 0)
+            if not (val <= other_val):
+                all_le = False
+                break
+            if val < other_val:
+                some_lt = True
+        if all_le and some_lt:
+            return -1
+
+        # if there are keys, and every element in the vector is >=, and at
+        # least one is >, then >
+        all_ge = True
+        some_gt = False
+        for key in all_keys:
+            val = self.clocks.get(key, 0)
+            other_val = other.clocks.get(key, 0)
+            if not (val >= other_val):
+                all_ge = False
+                break
+            if val > other_val:
+                some_gt = True
+        if all_ge and some_gt:
+            return 1
 
         # If it's not <, >, or ==, then we tiebreak
 
