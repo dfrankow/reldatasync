@@ -28,7 +28,7 @@ class Datastore(Generic[ID_TYPE], ABC):
     def _increment_sequence_id(self) -> int:
         self._sequence_id += 1
         logger.debug(
-            f"{self.id}: Increment self._sequence_id to {self._sequence_id}")
+            f"{self.id}: Increment {self.id} _sequence_id to {self._sequence_id}")
         return self._sequence_id
 
     def _set_sequence_id(self, the_id) -> None:
@@ -89,6 +89,8 @@ class Datastore(Generic[ID_TYPE], ABC):
                 # Now assign the rev for real
                 # Maybe sequence id changed since we looked above, get the real one
                 rev.set_clock(self.id, seq_id)
+                assert _REV not in doc or rev > doc[_REV], (
+                        "rev did not increase: {rev} !> {doc[_REV]} ")
                 doc[_REV] = str(rev)
             doc[_SEQ] = seq_id
             self._put(doc)
@@ -295,7 +297,8 @@ class Datastore(Generic[ID_TYPE], ABC):
             'client thinks server seq is %d, server thinks seq is %d' % (
              self.get_peer_sequence_id(destination.id), destination.sequence_id))
 
-        logger.debug("************ sync done, seq is %d" % self.sequence_id)
+        logger.debug(f"******** sync done, {self.id} seq is {self.sequence_id},"
+                     f" {destination.id} seq is {destination.sequence_id}")
 
 
 class MemoryDatastore(Datastore):
