@@ -5,6 +5,7 @@ import random
 import psycopg2
 import unittest
 
+from reldatasync import util
 from reldatasync.datastore import (
     MemoryDatastore, PostgresDatastore, Datastore)
 from reldatasync.document import Document, _REV, _ID, _SEQ, _DELETED
@@ -14,7 +15,7 @@ from reldatasync.vectorclock import VectorClock
 logger = logging.getLogger(__name__)
 
 # Get log level from environment so we can set it for python -m unittest
-logging.basicConfig(level=os.getenv('LOG_LEVEL', 'WARNING'))
+util.basic_config(os.getenv('LOG_LEVEL', 'WARNING'))
 
 
 class _TestDatastore(unittest.TestCase):
@@ -38,6 +39,24 @@ class _TestDatastore(unittest.TestCase):
         self.assertTrue(ds1.equals_no_seq(ds2))
         self.assertTrue(ds1.check())
         self.assertTrue(ds2.check())
+
+    def test_datastore_id(self):
+        if self.server.__class__ == MemoryDatastore:
+            ds = MemoryDatastore('name')
+        elif self.server.__class__ == PostgresDatastore:
+            ds = PostgresDatastore('name', None, 'table')
+        self.assertEqual(32, len(ds.id))
+        self.assertNotIn('-', ds.id)
+
+    def test_new_rev_and_seq(self):
+        rev = ''
+        rev, seq = self.server.new_rev_and_seq(rev)
+        self.assertEqual(1, seq)
+        self.assertEqual(str(VectorClock({'server_id': 1})), rev)
+
+        rev, seq = self.server.new_rev_and_seq(rev)
+        self.assertEqual(2, seq)
+        self.assertEqual(str(VectorClock({'server_id': 2})), rev)
 
     def test_nonoverlapping_sync(self):
         """Non-overlapping documents from datastore"""
@@ -131,11 +150,11 @@ class _TestDatastore(unittest.TestCase):
                       _REV: str(VectorClock({self.client.id: 1})),
                       _SEQ: 1}),
             self.client.get('B'))
+        # server's C won
         self.assertEqual(
-            Document({_ID: 'C', 'value': 'val4',
-                      _REV: str(VectorClock({self.client.id: 2})),
-                      # client ignores server's change, so _SEQ is still 2
-                      _SEQ: 2}),
+            Document({_ID: 'C', 'value': 'val3',
+                      _REV: str(VectorClock({self.server.id: 2})),
+                      _SEQ: 4}),
             self.client.get('C'))
 
         # server
@@ -149,11 +168,12 @@ class _TestDatastore(unittest.TestCase):
                       _REV: str(VectorClock({self.client.id: 1})),
                       _SEQ: 3}),
             self.server.get('B'))
+        # server's C won
         self.assertEqual(
-            Document({_ID: 'C', 'value': 'val4',
-                      # server get's client's change
-                      _REV: str(VectorClock({self.client.id: 2})),
-                      _SEQ: 4}),
+            Document({_ID: 'C', 'value': 'val3',
+                      _REV: str(VectorClock({self.server.id: 2})),
+                      # server ignored client, so _SEQ is still 2
+                      _SEQ: 2}),
             self.server.get('C'))
 
     def test_get_docs_since(self):
@@ -324,13 +344,14 @@ class _TestDatastore(unittest.TestCase):
         self.assertEqual(
             Document({_ID: 'C', 'value': 'val3',
                       _REV: str(VectorClock({self.third.id: 1})),
-                      _SEQ: 5}),
+                      _SEQ: 4}),
             self.server.get('C'))
-        # third's D wins
+        # server's D wins
         self.assertEqual(
-            Document({_ID: 'D', 'value': 'val5',
-                      _REV: str(VectorClock({self.third.id: 2})),
-                      _SEQ: 6}),
+            Document({_ID: 'D', 'value': 'val3',
+                      _REV: str(VectorClock({self.server.id: 2})),
+                      # ignored third's D
+                      _SEQ: 2}),
             self.server.get('D'))
 
         # client also has C
@@ -356,7 +377,7 @@ class _TestDatastore(unittest.TestCase):
     def test_long_streaks(self):
         items = ['a', 'b', 'c', 'd', 'e']
 
-        for _ in range(32):
+        for _ in range(16):
             # some mods for server, then client
             _TestDatastore._some_datastore_mods(self.server, items)
             _TestDatastore._some_datastore_mods(self.client, items)
@@ -398,9 +419,9 @@ class _TestDatastore(unittest.TestCase):
 class TestMemoryDatastore(_TestDatastore):
     def setUp(self):
         super().setUp()
-        self.server = MemoryDatastore('server')
-        self.client = MemoryDatastore('client')
-        self.third = MemoryDatastore('third')
+        self.server = MemoryDatastore('server', 'server_id')
+        self.client = MemoryDatastore('client', 'client_id')
+        self.third = MemoryDatastore('third', 'third_id')
 
 
 def _dbconnstr(dbname=None):
@@ -433,6 +454,7 @@ def exec_sql(exec_func, dbname=None, autocommit=True):
     # See https://stackoverflow.com/a/68112827
     try:
         conn = psycopg2.connect(connstr)
+        logger.debug(f'Connect 1 {connstr}')
         if autocommit:
             conn.set_isolation_level(
                 psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
@@ -441,6 +463,7 @@ def exec_sql(exec_func, dbname=None, autocommit=True):
     finally:
         if conn:
             conn.close()
+            logger.debug(f'Closed conn 1 {connstr}')
 
 
 def _create_test_db(dbname):
@@ -478,7 +501,9 @@ def _create_test_tables(dbname):
         _create_table_if_not_exists(
             dbname,
             'data_sync_revisions',
-            'datastore_id text not null, sequence_id int not null')
+            'datastore_id varchar(100) not null,'
+            'datastore_name varchar(1000) not null,'
+            ' sequence_id int not null')
         # docs1 only needed on server, and docs2 on client
         # but it's easier to just create both tables on both
         docs_def = """
@@ -494,10 +519,17 @@ def _create_test_tables(dbname):
 
 
 def _clear_tables(dbname):
+    # logger.debug(f"_clear_tables {dbname}")
+
     def exec_func(curs):
         curs.execute('DELETE FROM data_sync_revisions')
         curs.execute('DELETE FROM docs1')
         curs.execute('DELETE FROM docs2')
+
+        curs.execute('SELECT sequence_id FROM data_sync_revisions')
+        result = curs.fetchone()
+        assert result is None
+
     exec_sql(exec_func, dbname=dbname)
 
 
@@ -523,6 +555,10 @@ def _create_databases(cls, same_db):
     cls.third_connstr = _dbconnstr(cls.third_dbname)
     _create_test_db(cls.third_dbname)
 
+    cls.server_conn = psycopg2.connect(cls.server_connstr)
+    cls.client_conn = psycopg2.connect(cls.client_connstr)
+    cls.third_conn = psycopg2.connect(cls.third_connstr)
+
 
 def _drop_databases(cls, same_db):
     _drop_db(cls.server_dbname)
@@ -532,9 +568,17 @@ def _drop_databases(cls, same_db):
 
 
 class TestPostgresDatastore(_TestDatastore):
+    # These aren't needed, but make warnings go away:
+    server_dbname = None
+    client_dbname = None
+    third_dbname = None
     client_connstr = None
     server_connstr = None
     third_connstr = None
+    client_conn = None
+    server_conn = None
+    third_conn = None
+
     # SAME_DB: if True, put server/client tables in one DB;
     # else put one table in two DBs.
     SAME_DB = True
@@ -547,23 +591,52 @@ class TestPostgresDatastore(_TestDatastore):
     @classmethod
     def tearDownClass(cls):
         super(TestPostgresDatastore, cls).tearDownClass()
+
+        # Close connections
+        for conn_name in ['server_conn', 'client_conn', 'third_conn']:
+            conn = getattr(cls, conn_name)
+            if conn:
+                logger.debug(f'Close conn 2 {conn_name}')
+                conn.close()
+
         _drop_databases(cls, TestPostgresDatastore.SAME_DB)
 
     def setUp(self):
         super().setUp()
+
         # Clear tables for server and client
         _clear_tables(TestPostgresDatastore.server_dbname)
         _clear_tables(TestPostgresDatastore.client_dbname)
         _clear_tables(TestPostgresDatastore.third_dbname)
 
+        # HACK: re-connect in order to get the changes from _clear_tables
+        # If I knew what I was doing, the _clear_tables from above would
+        # be seen in these connections without re-connecting
+        cls = TestPostgresDatastore
+        cls.server_conn.close()
+        logger.debug('Closed conn 3 server_conn')
+        cls.server_conn = psycopg2.connect(cls.server_connstr)
+        logger.debug('Connected 3 conn server_conn')
+        cls.client_conn.close()
+        logger.debug('Closed conn 3 client_conn')
+        cls.client_conn = psycopg2.connect(cls.client_connstr)
+        logger.debug('Connected 3 conn client_conn')
+        cls.third_conn.close()
+        logger.debug('Closed conn 3 third_conn')
+        cls.third_conn = psycopg2.connect(cls.third_connstr)
+        logger.debug('Connected 3 conn third_conn')
+
         self.server = PostgresDatastore(
-            'server', TestPostgresDatastore.server_connstr, 'docs1')
+            'server', TestPostgresDatastore.server_conn, 'docs1',
+            datastore_id='server_id')
         self.server.__enter__()
         self.client = PostgresDatastore(
-            'client', TestPostgresDatastore.client_connstr, 'docs2')
+            'client', TestPostgresDatastore.client_conn, 'docs2',
+            datastore_id='client_id')
         self.client.__enter__()
         self.third = PostgresDatastore(
-            'third', TestPostgresDatastore.third_connstr, 'docs1')
+            'third', TestPostgresDatastore.third_conn, 'docs1',
+            datastore_id='third_id')
         self.third.__enter__()
 
     def tearDown(self) -> None:

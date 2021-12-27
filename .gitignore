@@ -3,3 +3,7 @@
 
 # My tmp dirs
 tmp/
+
+# python files
+__pycache__/
+*.sqlite3

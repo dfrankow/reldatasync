@@ -128,6 +128,9 @@ class VectorClock:
             # No whitespace: https://stackoverflow.com/a/16311587
             separators=(',', ':'))
 
+    def __repr__(self) -> str:
+        return f'VectorClock({self.clocks})'
+
     @staticmethod
     def from_string(string) -> 'VectorClock':
         # NOTE: check this is a valid string?

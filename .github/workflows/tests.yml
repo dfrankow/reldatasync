@@ -56,6 +56,16 @@ jobs:
         POSTGRES_USER: postgres
         POSTGRES_PASSWORD: postgres
         POSTGRES_HOST: localhost
+    - name: Run Django tests
+        cd django
+        pip install -r requirements.txt --use-feature=2020-resolver
+        # python manage.py collectstatic --noinput
+        python manage.py test
+      env:
+        # Variables for unit tests
+        # must match postgres service above
+        # DATABASE_URL: postgres://postgres:postgres@localhost:5432/default
+        SECRET_KEY: this-has-to-be-at-least-51-characters-and-6-unique-ones
     - name: Run java tests
       run: |
         cd java/android

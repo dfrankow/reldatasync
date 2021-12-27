@@ -8,3 +8,8 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(
             '415f653054e3eafb9339cc3c14bcd072',
             util.dict_hash({'A': 1, 'B': 2}))
+
+    def test_uuid4_string(self):
+        ustr = util.uuid4_string()
+        self.assertEqual(32, len(ustr))
+        self.assertNotIn('-', ustr)
