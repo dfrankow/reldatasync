@@ -413,13 +413,13 @@ class PostgresDatastore(Datastore):
         super().__enter__()
         self.conn = psycopg2.connect(self.conn_str)
 
-        # TODO(dan): What exactly is our commit policy?
+        # TODO: What exactly is our commit policy?
         # self.conn.set_isolation_level(
         #     psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
         self.cursor = self.conn.cursor()
 
-        # TODO(dan): Create the data_sync_revisions table if needed
+        # TODO: Create the data_sync_revisions table if needed
 
         # Init sequence_id if not present
         # "ON CONFLICT" requires postgres 9.5+

@@ -44,7 +44,7 @@ def create_app():
             # Create table
             # If it already exists, that's okay
             _ = _get_datastore(table)
-            # TODO(dan): Return Location header of new resource
+            # TODO: Return Location header of new resource
             # See also https://restfulapi.net/http-methods/#post
             return Response("", status=201)
         elif request.method == 'GET':

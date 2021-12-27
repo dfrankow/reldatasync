@@ -47,7 +47,7 @@ class RestClientSourceDatastore(Datastore):
             self._server_url(self.table + '/docs'),
             params={'start_sequence_id': the_seq, 'chunk_size': num})
         ret = None
-        # TODO(dan): What about 500?
+        # TODO: What about 500?
         if resp.status_code == 200:
             js = resp.json()
             ret = (js['current_sequence_id'],
