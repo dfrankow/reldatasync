@@ -284,13 +284,13 @@ class _TestDatastore(unittest.TestCase):
 
         # pull server <= client
         logger.debug('*** pull server <= client')
-        Replicator(self.client, self.server).pull_changes()
+        Replicator(self.server, self.client).pull_changes()
         # pull client <= third
         logger.debug('*** pull client <= third')
-        Replicator(self.third, self.client).pull_changes()
+        Replicator(self.client, self.third).pull_changes()
         # pull server <= client
         logger.debug('*** pull server <= client')
-        Replicator(self.client, self.server).pull_changes()
+        Replicator(self.server, self.client).pull_changes()
 
         # third only has C and D, since nothing pushed to it
         self.assertEqual(

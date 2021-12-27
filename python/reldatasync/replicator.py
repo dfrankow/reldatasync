@@ -13,7 +13,6 @@ class Replicator:
         self.destination = destination
         self.chunk_size = chunk_size
 
-    # TODO: move to a synchronizer class
     @staticmethod
     def _pull_changes(destination, source, chunk_size) -> int:
         """Pull changes from source to destination.
@@ -69,7 +68,7 @@ class Replicator:
     def _push_changes(self) -> int:
         """Push changes from destination to source."""
         return Replicator._pull_changes(
-            self.source, self.destination, self.chunk_size)
+            self.destination, self.source, self.chunk_size)
 
     def pull_changes(self) -> int:
         """Pull changes from source to destination.
@@ -81,7 +80,7 @@ class Replicator:
         :return: number of docs changed (in self).
         """
         return Replicator._pull_changes(
-            self.destination, self.source, self.chunk_size)
+            self.source, self.destination, self.chunk_size)
 
     def sync_both_directions(self) -> None:
         """Sync client and server in both directions
