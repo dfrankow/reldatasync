@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 
 import argparse
-import requests
-from typing import Sequence, Tuple, Dict
+import logging
+import os
 
+import requests
+from typing import Sequence, Tuple
+
+from reldatasync import util
 from reldatasync.datastore import Datastore, MemoryDatastore
-from reldatasync.document import Document, ID_TYPE
+from reldatasync.document import Document, ID_TYPE, _ID
+
+logger = logging.getLogger(__name__)
 
 
 class RestClientSourceDatastore(Datastore):
@@ -15,19 +21,25 @@ class RestClientSourceDatastore(Datastore):
         self.table = table
         self.baseurl = baseurl
 
-    def get(self, docid: ID_TYPE) -> Document:
+    def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         resp = requests.get(
-            self._server_url(self.table + '/doc/' + docid))
+            self._server_url(self.table + '/doc/' + docid),
+            params={'include_deleted': include_deleted})
         ret = None
         if resp.status_code == 200:
             ret = resp.json()
         return ret
 
-    def put(self, doc: Document) -> None:
+    def put(self, doc: Document, increment_rev=False) -> None:
+        logger.debug(f"RCSD {self.table}: put doc {doc}"
+                     f" increment_rev {increment_rev}")
         resp = requests.post(
             self._server_url(self.table + '/doc'),
+            params={'increment_rev': increment_rev},
             json=doc)
         assert resp.status_code == 200, resp.status_code
+        json = resp.json()
+        return json['num_docs_put']
 
     def get_docs_since(self, the_seq: int, num: int) -> Tuple[
             int, Sequence[Document]]:
@@ -50,10 +62,17 @@ def main():
     parser.add_argument('--server-url', '-s', dest='server_url',
                         required=True,
                         help='URL of the server')
+    parser.add_argument('--log-level', '-l', dest='log_level',
+                        default='WARNING',
+                        help='Log level')
     args = parser.parse_args()
+
+    util.basic_config(os.getenv('LOG_LEVEL', args.log_level))
+
     base_url = "http://" + args.server_url
-    # server_url is a function that returns base + rest
-    server_url = lambda url: base_url + url
+
+    def server_url(url):
+        return base_url + url
 
     # Create table1
     resp = requests.post(server_url('table1'))
@@ -84,7 +103,10 @@ def main():
     d2 = {"_id": '2', "var1": "value2"}
     d3 = {"_id": '3', "var1": "value3"}
     data = [d1, d2, d3]
-    resp = requests.post(server_url('table1/docs'), json=data)
+    resp = requests.post(
+        server_url('table1/docs'),
+        params={'increment_rev': True},
+        json=data)
     assert resp.status_code == 200
     ct = resp.headers['content-type']
     assert ct == 'application/json', f"content type '{ct}'"
@@ -92,10 +114,13 @@ def main():
     assert js['num_docs_put'] == 3
 
     # Put the same three docs in table1, num_docs_put==0
+    # TODO: should we add increment_rev, and change server to check clocks?
     resp = requests.post(server_url('table1/docs'), json=data)
-    assert resp.status_code == 200
-    js = resp.json()
-    assert js['num_docs_put'] == 0
+    assert resp.status_code == 422, resp.status_code
+    assert resp.content == b'doc 1 must have _rev if increment_rev is False', (
+        resp.content)
+    # js = resp.json()
+    # assert js['num_docs_put'] == 0
 
     # Check three docs in table1
     resp = requests.get(server_url('table1/docs'))
@@ -105,22 +130,28 @@ def main():
     js = resp.json()
     assert len(js['documents']) == 3, f'js is {js}'
     assert js['current_sequence_id'] == 3, f'js is {js}'
-    # server assigned revision numbers:
-    d1['_rev'] = 1
-    d2['_rev'] = 2
-    d3['_rev'] = 3
     docs = js['documents']
-    assert d1 in docs
-    assert d2 in docs
-    assert d3 in docs
+    # server assigned revision numbers and sequence ids
+    # compare data, except for _rev and _seq, set by server
+    # also, they are returned in order
+    for idx in range(len(data)):
+        sdoc = docs[idx]
+        doc = data[idx]
+        doc['_rev'] = sdoc['_rev']
+        doc['_seq'] = sdoc['_seq']
+        assert doc in docs
+        assert doc in data
 
     # Put docs in a local datastore
-    ds = MemoryDatastore('datastore')
+    ds = MemoryDatastore('client')
+    # this id '1' will be different from table1 above, because we are
+    # putting it in a different datastore with increment_rev=True
     d1a = {"_id": '1', "var1": "value1a"}
     d4 = {"_id": '4', "var1": "value4"}
     d5 = {"_id": '5', "var1": "value5"}
     for doc in [d1a, d4, d5]:
-        ds.put(Document(doc))
+        ds.put(Document(doc), increment_rev=True)
+        assert ds.get(doc[_ID])
 
     # Sync local datastore with remote table1
     remote_ds = RestClientSourceDatastore(base_url, 'table1')
