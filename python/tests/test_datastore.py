@@ -8,6 +8,7 @@ import unittest
 from reldatasync.datastore import (
     MemoryDatastore, PostgresDatastore, Datastore)
 from reldatasync.document import Document, _REV, _ID, _SEQ, _DELETED
+from reldatasync.replicator import Replicator
 from reldatasync.vectorclock import VectorClock
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ class _TestDatastore(unittest.TestCase):
         self.assertTrue(ds1.equals_no_seq(ds2))
 
     def sync_and_check(self, ds1: Datastore, ds2: Datastore):
-        ds1.sync_both_directions(ds2)
+        Replicator(ds1, ds2).sync_both_directions()
         self.assertTrue(ds1.equals_no_seq(ds2))
         self.assertTrue(ds1.check())
         self.assertTrue(ds2.check())
@@ -283,13 +284,13 @@ class _TestDatastore(unittest.TestCase):
 
         # pull server <= client
         logger.debug('*** pull server <= client')
-        self.server.pull_changes(self.client)
+        Replicator(self.client, self.server).pull_changes()
         # pull client <= third
         logger.debug('*** pull client <= third')
-        self.client.pull_changes(self.third)
+        Replicator(self.third, self.client).pull_changes()
         # pull server <= client
         logger.debug('*** pull server <= client')
-        self.server.pull_changes(self.client)
+        Replicator(self.client, self.server).pull_changes()
 
         # third only has C and D, since nothing pushed to it
         self.assertEqual(
@@ -362,7 +363,8 @@ class _TestDatastore(unittest.TestCase):
 
             # sync
             # use small chunk size to test multiple chunks
-            self.client.sync_both_directions(self.server, chunk_size=2)
+            Replicator(self.client, self.server, chunk_size=2
+                       ).sync_both_directions()
 
             # server and client should now contain the same stuff
             self.assert_equals_no_seq(self.client, self.server)
