@@ -41,9 +41,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         return self._sequence_id
 
     def _set_new_rev(self, doc: Document, seq_id: int) -> None:
-        """Set increment_rev revision for a doc.
-
-        Return new sequence id."""
+        """Set increment_rev revision for a doc."""
         rev = VectorClock.from_string(doc.get(_REV, "{}"))
         rev.set_clock(self.id, seq_id)
         doc[_REV] = str(rev)
@@ -60,7 +58,8 @@ class Datastore(Generic[ID_TYPE], ABC):
                               not present, it adds one.
         """
         if not increment_rev and _REV not in doc:
-            raise ValueError(f"doc must have {_REV} if increment_rev is False")
+            raise ValueError(
+                f"doc {doc.get(_ID, '')} must have {_REV} if increment_rev is False")
 
         # copy doc so we don't modify caller's doc
         doc = doc.copy()
@@ -98,12 +97,13 @@ class Datastore(Generic[ID_TYPE], ABC):
             ret = 1
 
             logger.debug(
-                f"{self.id}: Put docid {docid} doc {doc} seq {rev} "
-                f" (compared to doc {my_doc} seq {my_rev})")
+                f"{self.id}: Put docid {docid} doc {doc} rev {rev}"
+                f" inc_rev {increment_rev}"
+                f" (compared to my_doc {my_doc} my_rev {my_rev})")
         else:
-            logger.debug("Ignore docid %s doc %s seq %s "
-                         "(compared to doc %s seq %s)" % (
-                          docid, doc, rev, my_doc, my_rev))
+            logger.debug(f"{self.id}: Ignore docid {docid} doc {doc} rev {rev} "
+                         f" inc_rec {increment_rev}"
+                         f" (compared to doc {my_doc} my_rev {my_rev})")
         return ret
 
     def delete(self, docid: ID_TYPE) -> None:
@@ -133,10 +133,6 @@ class Datastore(Generic[ID_TYPE], ABC):
 
     @abstractmethod
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
-        pass
-
-    @abstractmethod
-    def _put(self, doc: Document) -> None:
         pass
 
     @abstractmethod
@@ -280,7 +276,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         final_changes = self.push_changes(destination, chunk_size=chunk_size)
 
         # Since nothing else changed, only the sequence # was synchronized
-        assert final_changes == 0, 'actually had %d changes' % final_changes
+        assert final_changes == 0, f'actually had {final_changes} changes'
 
         # This is no longer true.  Their clocks may not be synchronized if
         # changes are ignored (and the sequence_id doesn't go up).
@@ -295,8 +291,9 @@ class Datastore(Generic[ID_TYPE], ABC):
              destination.get_peer_sequence_id(self.id), self.sequence_id))
         assert (self.get_peer_sequence_id(destination.id)
                 == destination.sequence_id), (
-            'client thinks server seq is %d, server thinks seq is %d' % (
-             self.get_peer_sequence_id(destination.id), destination.sequence_id))
+            f'{self.id} thinks {destination.id} seq is '
+            f'{self.get_peer_sequence_id(destination.id)},'
+            f' {destination.id} thinks seq is {destination.sequence_id}')
 
         logger.debug(f"******** sync done, {self.id} seq is {self.sequence_id},"
                      f" {destination.id} seq is {destination.sequence_id}")
