@@ -35,6 +35,7 @@ repos:
   rev: v1.1.10
   hooks:
   - id: forbid-crlf
+    exclude: (gradlew.bat)
   # don't just remove, seems dangerous
   # - id: remove-crlf
   - id: forbid-tabs
