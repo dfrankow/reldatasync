@@ -30,7 +30,7 @@ class RestClientSourceDatastore(Datastore):
             ret = resp.json()
         return ret
 
-    def put(self, doc: Document, increment_rev=False) -> None:
+    def put(self, doc: Document, increment_rev=False) -> int:
         logger.debug(f"RCSD {self.table}: put doc {doc}"
                      f" increment_rev {increment_rev}")
         resp = requests.post(
@@ -50,10 +50,11 @@ class RestClientSourceDatastore(Datastore):
         # TODO(dan): What about 500?
         if resp.status_code == 200:
             js = resp.json()
-            ret = js['current_sequence_id'], js['documents']
+            ret = (js['current_sequence_id'],
+                   [Document(doc) for doc in js['documents']])
         return ret
 
-    def _server_url(self, url):
+    def _server_url(self, url: str) -> str:
         return self.baseurl + url
 
 
@@ -99,15 +100,15 @@ def main():
     assert js['current_sequence_id'] == 0
 
     # Put three docs in table1
-    d1 = {"_id": '1', "var1": "value1"}
-    d2 = {"_id": '2', "var1": "value2"}
-    d3 = {"_id": '3', "var1": "value3"}
+    d1 = Document({"_id": '1', "var1": "value1"})
+    d2 = Document({"_id": '2', "var1": "value2"})
+    d3 = Document({"_id": '3', "var1": "value3"})
     data = [d1, d2, d3]
     resp = requests.post(
         server_url('table1/docs'),
         params={'increment_rev': True},
         json=data)
-    assert resp.status_code == 200
+    assert resp.status_code == 200, resp.status_code
     ct = resp.headers['content-type']
     assert ct == 'application/json', f"content type '{ct}'"
     js = resp.json()
@@ -146,9 +147,9 @@ def main():
     ds = MemoryDatastore('client')
     # this id '1' will be different from table1 above, because we are
     # putting it in a different datastore with increment_rev=True
-    d1a = {"_id": '1', "var1": "value1a"}
-    d4 = {"_id": '4', "var1": "value4"}
-    d5 = {"_id": '5', "var1": "value5"}
+    d1a = Document({"_id": '1', "var1": "value1a"})
+    d4 = Document({"_id": '4', "var1": "value4"})
+    d5 = Document({"_id": '5', "var1": "value5"})
     for doc in [d1a, d4, d5]:
         ds.put(Document(doc), increment_rev=True)
         assert ds.get(doc[_ID])
@@ -158,14 +159,7 @@ def main():
     ds.sync_both_directions(remote_ds)
 
     # Check that table1 and table2 have the same things
-    local_seq, local_docs = ds.get_docs_since(0, 10)
-    remote_seq, remote_docs = remote_ds.get_docs_since(0, 10)
-    assert local_seq == remote_seq
-    assert len(local_docs) == len(remote_docs)
-    for local_doc in local_docs:
-        assert local_doc in remote_docs
-    for remote_doc in remote_docs:
-        assert remote_doc in local_docs
+    assert ds.equals_no_seq(remote_ds)
 
 
 if __name__ == '__main__':

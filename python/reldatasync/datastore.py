@@ -1,5 +1,5 @@
 """An abstraction of a datastore, to use for syncing."""
-
+import functools
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 import logging
@@ -24,6 +24,39 @@ class Datastore(Generic[ID_TYPE], ABC):
 
     def __exit__(self, *args):
         pass
+
+    def equals_no_seq(self, other: 'Datastore', max_docs: int = 1000):
+        """True if two datastores have the same docs, ignoring the _SEQ key.
+
+        _SEQ is local to a datastore, it can differ due to 'last write wins'.
+
+        This reads all docs from both datastores into memory.
+        """
+        _, docs1 = self.get_docs_since(0, max_docs)
+        _, docs2 = other.get_docs_since(0, max_docs)
+
+        if len(docs1) != len(docs2):
+            return False
+
+        def compare_no_seq(a, b):
+            return a.compare(b, ignore_keys={_SEQ})
+
+        docs1 = sorted(docs1, key=functools.cmp_to_key(compare_no_seq))
+        docs2 = sorted(docs2, key=functools.cmp_to_key(compare_no_seq))
+        # debug logging:
+        for idx in range(len(docs1)):
+            logger.debug(f"{self.id} docs[{idx}]={docs1[idx]}\n"
+                         f"{other.id} docs[{idx}]={docs2[idx]}\n")
+
+        for idx in range(len(docs1)):
+            if docs1[idx].compare(docs2[idx], ignore_keys={_SEQ}) != 0:
+                logger.debug(
+                    "First unequal element: "
+                    f"{self.id} docs[{idx}]={docs1[idx]}\n"
+                    f"{other.id} docs[{idx}]={docs2[idx]}")
+                return False
+
+        return True
 
     def _increment_sequence_id(self) -> int:
         self._sequence_id += 1
@@ -60,6 +93,8 @@ class Datastore(Generic[ID_TYPE], ABC):
         if not increment_rev and _REV not in doc:
             raise ValueError(
                 f"doc {doc.get(_ID, '')} must have {_REV} if increment_rev is False")
+
+        assert doc.__class__ == Document, f'doc class is {doc.__class__}'
 
         # copy doc so we don't modify caller's doc
         doc = doc.copy()
@@ -129,6 +164,7 @@ class Datastore(Generic[ID_TYPE], ABC):
     def set_peer_sequence_id(self, peer: str, seq: int) -> None:
         """Set increment_rev peer sequence id, if seq > what we have."""
         if seq > self.get_peer_sequence_id(peer):
+            logger.debug(f'{self.id}: set peer_seq_ids[{peer}] = {seq}')
             self.peer_seq_ids[peer] = seq
 
     @abstractmethod
@@ -158,6 +194,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         """
         pass
 
+    # TODO: move to a synchronizer class
     @staticmethod
     def _pull_changes(destination, source, chunk_size=10) -> int:
         """Pull changes from source to destination.
@@ -195,7 +232,7 @@ class Datastore(Generic[ID_TYPE], ABC):
             # we stepped forward to that, or to the latest the source had
             new_peer_seq_id = min(source_seq_id, new_peer_seq_id+chunk_size)
 
-        # source_seq_id is at least as increment_rev as the docs that came over
+        # source_seq_id is at least as new as the docs that came over
         assert source_seq_id >= new_peer_seq_id, (
             'source seq %d increment_rev peer seq %d' % (
              source.sequence_id, new_peer_seq_id))
@@ -210,6 +247,7 @@ class Datastore(Generic[ID_TYPE], ABC):
 
         return docs_changed
 
+    # TODO: move to a synchronizer class
     def push_changes(self, destination, chunk_size=10) -> int:
         """Push changes from self to destination.
 
@@ -221,6 +259,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         """
         return Datastore._pull_changes(destination, self, chunk_size=chunk_size)
 
+    # TODO: move to a synchronizer class
     def pull_changes(self, source, chunk_size=10) -> int:
         """Pull changes from source to self.
 
@@ -233,6 +272,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         """
         return Datastore._pull_changes(self, source, chunk_size=chunk_size)
 
+    # TODO: move to a synchronizer class
     def sync_both_directions(self, destination, chunk_size=10) -> None:
         """Sync client and server in both directions
 
@@ -285,15 +325,27 @@ class Datastore(Generic[ID_TYPE], ABC):
         #     "server.sequence_id %d client.sequence_id %s" %
         #     (destination.sequence_id, self.sequence_id))
 
+        # ### debug logging
+        # logger.debug(f'{self.id} seq {self._sequence_id}')
+        # logger.debug(f'{destination.id} seq {destination._sequence_id}')
+        # for peer in self.peer_seq_ids:
+        #     logger.debug(f'{self.id} peer_seq_ids[{peer}]={self.peer_seq_ids[peer]}')
+        # for peer in destination.peer_seq_ids:
+        #     logger.debug(f'{destination.id} peer_seq_ids[{peer}]={destination.peer_seq_ids[peer]}')
+        # ###
+
         # now they know about each others' clocks
         assert destination.get_peer_sequence_id(self.id) == self.sequence_id, (
-            'server thinks client seq is %d, client thinks seq is %d' % (
-             destination.get_peer_sequence_id(self.id), self.sequence_id))
-        assert (self.get_peer_sequence_id(destination.id)
-                == destination.sequence_id), (
-            f'{self.id} thinks {destination.id} seq is '
-            f'{self.get_peer_sequence_id(destination.id)},'
-            f' {destination.id} thinks seq is {destination.sequence_id}')
+            f'{destination.id} thinks {self.id} seq is '
+            f'{destination.get_peer_sequence_id(self.id)}, '
+            f'{self.id} thinks seq is {self.sequence_id}')
+
+        # TODO: decide if this assert is still right
+        # assert (self.get_peer_sequence_id(destination.id)
+        #         == destination.sequence_id), (
+        #     f'{self.id} thinks {destination.id} seq is '
+        #     f'{self.get_peer_sequence_id(destination.id)},'
+        #     f' {destination.id} thinks seq is {destination.sequence_id}')
 
         logger.debug(f"******** sync done, {self.id} seq is {self.sequence_id},"
                      f" {destination.id} seq is {destination.sequence_id}")

@@ -7,6 +7,8 @@ from reldatasync.datastore import MemoryDatastore
 
 import logging
 
+from reldatasync.document import Document
+
 datastores = {}
 
 
@@ -82,7 +84,8 @@ def create_app():
                 for the_doc in request.json:
                     increment_rev = (
                             request.args.get('increment_rev', False) == 'True')
-                    num_put += datastore.put(the_doc, increment_rev=increment_rev)
+                    num_put += datastore.put(
+                        Document(the_doc), increment_rev=increment_rev)
             except ValueError as err:
                 return str(err), 422
             # TODO: should response have docs with clocks set?  I think yes.
@@ -102,14 +105,15 @@ def create_app():
             return ret
         elif request.method == 'POST':
             increment_rev = request.args.get('increment_rev', False) == 'True'
-            num_put = datastore.put(request.json, increment_rev=increment_rev)
+            num_put = datastore.put(
+                Document(request.json), increment_rev=increment_rev)
             return {'num_docs_put': num_put}
 
     return app
 
 
 if __name__ == '__main__':
-    util.basic_config(logging.DEBUG)
+    util.basic_config(logging.WARNING)
 
     app = create_app()
     app.run()

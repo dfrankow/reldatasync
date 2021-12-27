@@ -31,26 +31,7 @@ class _TestDatastore(unittest.TestCase):
             self.skipTest("Skip base class test (_TestDatastore)")
 
     def assert_equals_no_seq(self, ds1, ds2):
-        """Compare two datastores, ignoring the _SEQ key.
-
-        _SEQ is local to a datastore, it can differ due to 'last write wins'."""
-        _, docs1 = ds1.get_docs_since(0, 1000)
-        _, docs2 = ds2.get_docs_since(0, 1000)
-
-        self.assertEqual(len(docs1), len(docs2))
-
-        def compare_no_seq(a, b):
-            return a.compare(b, ignore_keys={_SEQ})
-
-        docs1 = sorted(docs1, key=functools.cmp_to_key(compare_no_seq))
-        docs2 = sorted(docs2, key=functools.cmp_to_key(compare_no_seq))
-        # debug logging:
-        for idx in range(len(docs1)):
-            logger.debug(f"docs1[{idx}]={docs1[idx]}\ndocs2[{idx}]={docs2[idx]}\n")
-        for idx in range(len(docs1)):
-            self.assertEqual(
-                0, docs1[idx].compare(docs2[idx], ignore_keys={_SEQ}),
-                f"docs_c[{idx}]={docs1[idx]}\ndocs_s[{idx}]={docs2[idx]}")
+        self.assertTrue(ds1.equals_no_seq(ds2))
 
     def test_nonoverlapping_sync(self):
         """Non-overlapping documents from datastore"""
