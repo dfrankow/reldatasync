@@ -3,7 +3,7 @@
 # Run 'pre-commit install' to install the pre-commit hooks
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.0.1
+    rev: v4.1.0
     hooks:
     - id: check-added-large-files
     - id: check-ast
@@ -26,7 +26,7 @@ repos:
         - flake8-bugbear
 
 - repo: https://github.com/adrienverge/yamllint.git
-  rev: v1.26.1
+  rev: v1.26.3
   hooks:
     - id: yamllint
       args: ['-c.yamllint-config.yml', '-s']
