@@ -48,16 +48,16 @@ class TestVectorClock(unittest.TestCase):
 
     def test_compare_add_element(self):
         # adding an element makes rev go up
-        vcc = VectorClock({"client": 44})
-        vcs = VectorClock({"client": 44, "server": 38})
+        vcc = VectorClock({'client': 44})
+        vcs = VectorClock({'client': 44, 'server': 38})
         self.assertEqual(-1, vcc._compare(vcs))
 
         # TODO: random cases testing that adding an element makes rev go up
 
     def test_compare_indeterminate(self):
         # adding an element makes rev go up
-        vc1 = VectorClock({"client": 1, "server": 2})
-        vc2 = VectorClock({"client": 2, "server": 1})
+        vc1 = VectorClock({'client': 1, 'server': 2})
+        vc2 = VectorClock({'client': 2, 'server': 1})
         self.assertEqual(-1, vc1._compare(vc2))
 
     def test_setgetclock(self):
@@ -82,7 +82,7 @@ class TestVectorClock(unittest.TestCase):
     def test_empty_vectorclock(self):
         # empty is < any set clock
         ve = VectorClock({})
-        self.assertEqual("{}", str(ve))
+        self.assertEqual('{}', str(ve))
 
         va = VectorClock({'A': 1})
         self.assertFalse(ve == va)
@@ -102,4 +102,4 @@ class TestVectorClock(unittest.TestCase):
         self.assertEqual(vc, VectorClock.from_string(str_rep))
 
         # from empty string
-        self.assertEqual(VectorClock({}), VectorClock.from_string("{}"))
+        self.assertEqual(VectorClock({}), VectorClock.from_string('{}'))

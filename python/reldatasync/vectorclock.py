@@ -6,8 +6,9 @@ from reldatasync import util
 
 class VectorClock:
     """
-    A vector clock is a data structure used for determining the partial ordering
-    of events in a distributed system and detecting causality violations.
+    A vector clock is a data structure used for determining the partial
+    ordering of events in a distributed system and detecting causality
+    violations.
 
     See https://en.wikipedia.org/wiki/Vector_clock.
 
@@ -120,11 +121,12 @@ class VectorClock:
         return self._compare(other) != -1
 
     def __str__(self) -> str:
-        return json.dumps(self.clocks,
-                          # Sorting is not needed, but let's be easy on the eyes
-                          sort_keys=True,
-                          # No whitespace: https://stackoverflow.com/a/16311587
-                          separators=(',', ':'))
+        return json.dumps(
+            self.clocks,
+            # Sorting is not needed, but let's be easy on the eyes
+            sort_keys=True,
+            # No whitespace: https://stackoverflow.com/a/16311587
+            separators=(',', ':'))
 
     @staticmethod
     def from_string(string) -> 'VectorClock':
