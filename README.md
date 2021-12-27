@@ -43,9 +43,15 @@ with my common stack: Postgres on a server, and sqlite on android.
 
 CouchDB has a nice property that every revision is always kept and
 synced.  However, this makes querying more complicated, as you always
-have to ignore old revisions.  Thus, I've decided to only keep the
-latest revision ("last write wins"), which makes this effort not
-compatible with CouchDB.
+have to ignore old revisions.
+
+Thus, I've decided to only keep the latest revision ("last write
+wins"), which makes this effort not compatible with CouchDB.
+
+For more on using vector clocks to implement "last write wins", see
+for example section 4.4 ("Data Versioning") of [Dynamo: Amazon’s
+Highly Available Key-value
+Store](https://www.allthingsdistributed.com/2007/10/amazons_dynamo.html)
 
 [Cloud Firestore](https://firebase.google.com/products/firestore/) is a
 product that handles synchronization including an offline mode.  However,
