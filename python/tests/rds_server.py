@@ -2,9 +2,12 @@
 
 from flask import Flask, request, abort, Response
 # from reldatasync.datastore import PostgresDatastore
+from reldatasync import util
 from reldatasync.datastore import MemoryDatastore
 
 import logging
+
+from reldatasync.document import Document
 
 datastores = {}
 
@@ -12,7 +15,7 @@ datastores = {}
 def _get_datastore(table, autocreate=True):
     if table not in datastores and autocreate:
         # datastores[table] = PostgresDatastore('datastore', _connstr(), table)
-        datastores[table] = MemoryDatastore('datastore')
+        datastores[table] = MemoryDatastore('server')
     return datastores.get(table, None)
 
 
@@ -41,7 +44,7 @@ def create_app():
             # Create table
             # If it already exists, that's okay
             _ = _get_datastore(table)
-            # TODO(dan): Return Location header of new resource
+            # TODO: Return Location header of new resource
             # See also https://restfulapi.net/http-methods/#post
             return Response("", status=201)
         elif request.method == 'GET':
@@ -77,8 +80,15 @@ def create_app():
         elif request.method == 'POST':
             # put docs
             num_put = 0
-            for the_doc in request.json:
-                num_put += datastore.put_if_needed(the_doc)
+            try:
+                for the_doc in request.json:
+                    increment_rev = (
+                            request.args.get('increment_rev', False) == 'True')
+                    num_put += datastore.put(
+                        Document(the_doc), increment_rev=increment_rev)
+            except ValueError as err:
+                return str(err), 422
+            # TODO: should response have docs with clocks set?  I think yes.
             return {'num_docs_put': num_put}
 
     @app.route('/<table>/doc/<docid>', methods=['GET'])
@@ -94,13 +104,16 @@ def create_app():
                 abort(404)
             return ret
         elif request.method == 'POST':
-            datastore.put(request.json)
-            # Return something else?
-            return "ok"
+            increment_rev = request.args.get('increment_rev', False) == 'True'
+            num_put = datastore.put(
+                Document(request.json), increment_rev=increment_rev)
+            return {'num_docs_put': num_put}
 
     return app
 
 
 if __name__ == '__main__':
+    util.basic_config(logging.WARNING)
+
     app = create_app()
     app.run()
