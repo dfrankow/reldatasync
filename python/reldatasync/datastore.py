@@ -25,6 +25,42 @@ class Datastore(Generic[ID_TYPE], ABC):
     def __exit__(self, *args):
         pass
 
+    def check(self, max_size=1000):
+        """Do some sanity checks.  Return True if they pass.
+
+        Note: this doesn't fully check if there are more than max_size docs.
+        Note: this reads all docs into memory.
+        """
+        ret = True
+        all_docids = set()
+        all_seqs = set()
+        max_seq, docs = self.get_docs_since(0, max_size)
+        for doc in docs:
+            docid = doc.get(_ID, '?')
+
+            # check uniqueness of docid
+            if docid in all_docids:
+                logger.warning(f'docid {docid} has repeated id')
+            all_docids.add(docid)
+
+            # check docs have _ID, _REV, _SEQ
+            for field in [_ID, _REV, _SEQ]:
+                if field not in doc:
+                    logger.warning(
+                        f'doc {docid} has no {field}')
+                    ret = False
+
+            # check doc _SEQ
+            seq = doc.get(_SEQ, None)
+            if seq in all_seqs:
+                logger.warning(f'docid {docid} has repeated seq {seq}')
+            all_seqs.add(seq)
+
+            if not (0 < doc[_SEQ] <= max_seq):
+                logger.warning(f'doc {docid} has seq out of bounds {seq}')
+                ret = False
+        return ret
+
     def equals_no_seq(self, other: 'Datastore', max_docs: int = 1000):
         """True if two datastores have the same docs, ignoring the _SEQ key.
 

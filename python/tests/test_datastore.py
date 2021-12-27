@@ -7,7 +7,7 @@ import psycopg2
 import unittest
 
 from reldatasync.datastore import (
-    MemoryDatastore, PostgresDatastore)
+    MemoryDatastore, PostgresDatastore, Datastore)
 from reldatasync.document import Document, _REV, _ID, _SEQ, _DELETED
 from reldatasync.vectorclock import VectorClock
 
@@ -33,6 +33,12 @@ class _TestDatastore(unittest.TestCase):
     def assert_equals_no_seq(self, ds1, ds2):
         self.assertTrue(ds1.equals_no_seq(ds2))
 
+    def sync_and_check(self, ds1: Datastore, ds2: Datastore):
+        ds1.sync_both_directions(ds2)
+        self.assertTrue(ds1.equals_no_seq(ds2))
+        self.assertTrue(ds1.check())
+        self.assertTrue(ds2.check())
+
     def test_nonoverlapping_sync(self):
         """Non-overlapping documents from datastore"""
         # server makes object A v1
@@ -43,10 +49,7 @@ class _TestDatastore(unittest.TestCase):
             Document({_ID: 'B', 'value': 'val2'}), increment_rev=True)
 
         # sync leaves both server and client with A val1, B val2
-        self.client.sync_both_directions(self.server)
-
-        # server and client should now contain the same stuff
-        self.assert_equals_no_seq(self.client, self.server)
+        self.sync_and_check(self.client, self.server)
 
         # client
         self.assertEqual(
@@ -115,10 +118,7 @@ class _TestDatastore(unittest.TestCase):
             Document({_ID: 'C', 'value': 'val4'}), increment_rev=True)
 
         # sync leaves both server and client with A val1,  B val2, C val4
-        self.client.sync_both_directions(self.server)
-
-        # server and client should now contain the same stuff
-        self.assert_equals_no_seq(self.client, self.server)
+        self.sync_and_check(self.client, self.server)
 
         # client
         self.assertEqual(
@@ -200,10 +200,7 @@ class _TestDatastore(unittest.TestCase):
         self.client.delete('C')
 
         # sync leaves both server and client with the same stuff
-        self.client.sync_both_directions(self.server)
-
-        # server and client should now contain the same stuff
-        self.assert_equals_no_seq(self.client, self.server)
+        self.sync_and_check(self.client, self.server)
 
         # client
         self.assertEqual(
@@ -257,15 +254,13 @@ class _TestDatastore(unittest.TestCase):
                 Document({_ID: item_name, 'value': 716}), increment_rev=True)
 
         # sync leaves both server and client with a
-        self.client.sync_both_directions(self.server)
-        self.assert_equals_no_seq(self.client, self.server)
+        self.sync_and_check(self.client, self.server)
 
         # delete on server
         self.server.delete('a')
 
         # sync leaves both server and client with deleted a
-        self.client.sync_both_directions(self.server)
-        self.assert_equals_no_seq(self.client, self.server)
+        self.sync_and_check(self.client, self.server)
 
     def test_three_servers(self):
         # If we have three servers A, B, C
@@ -372,6 +367,8 @@ class _TestDatastore(unittest.TestCase):
 
             # server and client should now contain the same stuff
             self.assert_equals_no_seq(self.client, self.server)
+            self.assertTrue(self.client.check())
+            self.assertTrue(self.server.check())
 
     def test_copy(self):
         doc = Document({_ID: 'A', 'value': 'val1'})
