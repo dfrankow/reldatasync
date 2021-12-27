@@ -9,6 +9,12 @@ class Replicator:
     def __init__(self, source: Datastore,
                  destination: Datastore,
                  chunk_size: int = 10):
+        """Replicate from source to destination (with pull), or both ways.
+
+        :param source:   Source of data (for pull)
+        :param destination:   Destination for data (for pull)
+        :param chunk_size  Approximate number of docs per chunk
+        """
         self.source = source
         self.destination = destination
         self.chunk_size = chunk_size
@@ -74,8 +80,6 @@ class Replicator:
         """Pull changes from source to destination.
 
         Also update self seq id, and self peer seq id.
-
-        :param chunk_size  Approximate number of docs per chunk
 
         :return: number of docs changed (in self).
         """
