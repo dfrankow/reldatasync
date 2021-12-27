@@ -1,0 +1,44 @@
+# See http://pre-commit.com/#python
+# See https://github.com/pre-commit/pre-commit-hooks
+# Run 'pre-commit install' to install the pre-commit hooks
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.1.0
+    hooks:
+    - id: check-added-large-files
+    - id: check-ast
+    - id: check-case-conflict
+    - id: check-docstring-first
+    - id: check-merge-conflict
+    - id: check-symlinks
+    - id: debug-statements
+    - id: detect-private-key
+    - id: double-quote-string-fixer
+    - id: end-of-file-fixer
+    - id: mixed-line-ending
+    - id: trailing-whitespace
+
+-   repo: https://gitlab.com/pycqa/flake8
+    rev: 3.9.2
+    hooks:
+    - id: flake8
+      additional_dependencies:
+        - flake8-bugbear
+
+- repo: https://github.com/adrienverge/yamllint.git
+  rev: v1.26.3
+  hooks:
+    - id: yamllint
+      args: ['-c.yamllint-config.yml', '-s']
+
+- repo: https://github.com/Lucas-C/pre-commit-hooks
+  rev: v1.1.10
+  hooks:
+  - id: forbid-crlf
+    exclude: (gradlew.bat)
+  # don't just remove, seems dangerous
+  # - id: remove-crlf
+  - id: forbid-tabs
+    exclude: (README.md|.tsv)
+  # don't just remove, seems dangerous
+  # - id: remove-tabs

@@ -66,7 +66,7 @@ class Datastore(Generic[ID_TYPE], ABC):
 
         if max_seq != doc_max_seq:
             logger.warning(
-                f"doc_max_seq {doc_max_seq} max_seq reported {max_seq}")
+                f'doc_max_seq {doc_max_seq} max_seq reported {max_seq}')
             ret = False
 
         return ret
@@ -91,15 +91,15 @@ class Datastore(Generic[ID_TYPE], ABC):
         docs2 = sorted(docs2, key=functools.cmp_to_key(compare_no_seq))
         # debug logging:
         for idx in range(len(docs1)):
-            logger.debug(f"{self.id} docs[{idx}]={docs1[idx]}\n"
-                         f"{other.id} docs[{idx}]={docs2[idx]}\n")
+            logger.debug(f'{self.id} docs[{idx}]={docs1[idx]}\n'
+                         f'{other.id} docs[{idx}]={docs2[idx]}\n')
 
         for idx in range(len(docs1)):
             if docs1[idx].compare(docs2[idx], ignore_keys={_SEQ}) != 0:
                 logger.debug(
-                    "First unequal element: "
-                    f"{self.id} docs[{idx}]={docs1[idx]}\n"
-                    f"{other.id} docs[{idx}]={docs2[idx]}")
+                    'First unequal element: '
+                    f'{self.id} docs[{idx}]={docs1[idx]}\n'
+                    f'{other.id} docs[{idx}]={docs2[idx]}')
                 return False
 
         return True
@@ -107,7 +107,8 @@ class Datastore(Generic[ID_TYPE], ABC):
     def _increment_sequence_id(self) -> int:
         self._sequence_id += 1
         logger.debug(
-            f"{self.id}: Increment {self.id} _sequence_id to {self._sequence_id}")
+            f'{self.id}: Increment {self.id}'
+            f' _sequence_id to {self._sequence_id}')
         return self._sequence_id
 
     def _set_sequence_id(self, the_id) -> None:
@@ -121,7 +122,7 @@ class Datastore(Generic[ID_TYPE], ABC):
 
     def _set_new_rev(self, doc: Document, seq_id: int) -> None:
         """Set increment_rev revision for a doc."""
-        rev = VectorClock.from_string(doc.get(_REV, "{}"))
+        rev = VectorClock.from_string(doc.get(_REV, '{}'))
         rev.set_clock(self.id, seq_id)
         doc[_REV] = str(rev)
 
@@ -138,7 +139,8 @@ class Datastore(Generic[ID_TYPE], ABC):
         """
         if not increment_rev and _REV not in doc:
             raise ValueError(
-                f"doc {doc.get(_ID, '')} must have {_REV} if increment_rev is False")
+                f"doc {doc.get(_ID, '')} must have {_REV}"
+                f' if increment_rev is False')
 
         assert doc.__class__ == Document, f'doc class is {doc.__class__}'
 
@@ -167,24 +169,25 @@ class Datastore(Generic[ID_TYPE], ABC):
             seq_id = self._increment_sequence_id()
             if increment_rev:
                 # Now assign the rev for real
-                # Maybe sequence id changed since we looked above, get the real one
+                # Maybe sequence id changed since we looked above,
+                # use the one we just got
                 rev.set_clock(self.id, seq_id)
                 assert (_REV not in doc
                         or rev > VectorClock.from_string(doc[_REV])), (
-                        "rev did not increase: {rev} !> {doc[_REV]} ")
+                        'rev did not increase: {rev} !> {doc[_REV]} ')
                 doc[_REV] = str(rev)
             doc[_SEQ] = seq_id
             self._put(doc)
             ret = 1
 
             logger.debug(
-                f"{self.id}: Put docid {docid} doc {doc} rev {rev}"
-                f" inc_rev {increment_rev}"
-                f" (compared to my_doc {my_doc} my_rev {my_rev})")
+                f'{self.id}: Put docid {docid} doc {doc} rev {rev}'
+                f' inc_rev {increment_rev}'
+                f' (compared to my_doc {my_doc} my_rev {my_rev})')
         else:
-            logger.debug(f"{self.id}: Ignore docid {docid} doc {doc} rev {rev} "
-                         f" inc_rec {increment_rev}"
-                         f" (compared to doc {my_doc} my_rev {my_rev})")
+            logger.debug(f'{self.id}: Ignore docid {docid} doc {doc} rev {rev}'
+                         f' inc_rec {increment_rev}'
+                         f' (compared to doc {my_doc} my_rev {my_rev})')
         return ret
 
     def delete(self, docid: ID_TYPE) -> None:
@@ -200,7 +203,7 @@ class Datastore(Generic[ID_TYPE], ABC):
             seq_id = self._increment_sequence_id()
             doc[_SEQ] = seq_id
             self._set_new_rev(doc, seq_id)
-            logger.debug(f"{self.id}: after delete {doc}")
+            logger.debug(f'{self.id}: after delete {doc}')
             self._put(doc)
 
     def get_peer_sequence_id(self, peer: str) -> int:
@@ -272,7 +275,7 @@ class Datastore(Generic[ID_TYPE], ABC):
             #
             # "destination seq_id is at least as big as the docs we put in"
             # assert (len(docs) == 0 or
-            #         destination.sequence_id >= max([doc[_SEQ] for doc in docs]))
+            #      destination.sequence_id >= max([doc[_SEQ] for doc in docs]))
 
             # If we got all docs to (new_peer_seq_id+chunk_size), then either
             # we stepped forward to that, or to the latest the source had
@@ -303,7 +306,8 @@ class Datastore(Generic[ID_TYPE], ABC):
         :param chunk_size  Approximate number of docs per chunk
         :return: number of docs changed on destination.
         """
-        return Datastore._pull_changes(destination, self, chunk_size=chunk_size)
+        return Datastore._pull_changes(
+            destination, self, chunk_size=chunk_size)
 
     # TODO: move to a synchronizer class
     def pull_changes(self, source, chunk_size=10) -> int:
@@ -329,8 +333,8 @@ class Datastore(Generic[ID_TYPE], ABC):
         :param chunk_size: Approx. chunk_size to use for each directional sync
         :return: None
         """
-        # Here is an example diagram, with source on the left, dest on the right
-        # source made 2 changes, dest made 3, now they are going to sync.
+        # Here is an example diagram, with source on the left, dest on the
+        # right source made 2 changes, dest made 3, now they are going to sync.
         #
         #   source: 2
         #   dest  : 0
@@ -349,15 +353,15 @@ class Datastore(Generic[ID_TYPE], ABC):
 
         # 1. source -> destination
         logger.debug(
-            f"******* push changes from {self.id} to {destination.id}")
+            f'******* push changes from {self.id} to {destination.id}')
         self.push_changes(destination, chunk_size=chunk_size)
         # 2. destination -> source
         logger.debug(
-            f"******* pull changes from {destination.id} to {self.id}")
+            f'******* pull changes from {destination.id} to {self.id}')
         self.pull_changes(destination, chunk_size=chunk_size)
         # 3. push source seq -> destination seq
         logger.debug(
-            f"******* push changes from {self.id} to {destination.id} 2")
+            f'******* push changes from {self.id} to {destination.id} 2')
         # source.set_peer_sequence_id(destination.id, destination.sequence_id)
         final_changes = self.push_changes(destination, chunk_size=chunk_size)
 
@@ -375,9 +379,11 @@ class Datastore(Generic[ID_TYPE], ABC):
         # logger.debug(f'{self.id} seq {self._sequence_id}')
         # logger.debug(f'{destination.id} seq {destination._sequence_id}')
         # for peer in self.peer_seq_ids:
-        #     logger.debug(f'{self.id} peer_seq_ids[{peer}]={self.peer_seq_ids[peer]}')
+        #     logger.debug(f'{self.id} peer_seq_ids[{peer}]'
+        #                  f'={self.peer_seq_ids[peer]}')
         # for peer in destination.peer_seq_ids:
-        #     logger.debug(f'{destination.id} peer_seq_ids[{peer}]={destination.peer_seq_ids[peer]}')
+        #     logger.debug(f'{destination.id} peer_seq_ids[{peer}]'
+        #                  f'={destination.peer_seq_ids[peer]}')
         # ###
 
         # now they know about each others' clocks
@@ -393,8 +399,9 @@ class Datastore(Generic[ID_TYPE], ABC):
         #     f'{self.get_peer_sequence_id(destination.id)},'
         #     f' {destination.id} thinks seq is {destination.sequence_id}')
 
-        logger.debug(f"******** sync done, {self.id} seq is {self.sequence_id},"
-                     f" {destination.id} seq is {destination.sequence_id}")
+        logger.debug(
+            f'******** sync done, {self.id} seq is {self.sequence_id},'
+            f' {destination.id} seq is {destination.sequence_id}')
 
 
 class MemoryDatastore(Datastore):
@@ -436,7 +443,7 @@ class MemoryDatastore(Datastore):
         :return  current sequence id, docs
         """
         docs = []
-        for docid, doc in self.datastore.items():
+        for _docid, doc in self.datastore.items():
             doc_seq = doc[_SEQ]
             assert doc_seq is not None
             if the_seq < doc_seq <= (the_seq + num):
@@ -472,16 +479,16 @@ class PostgresDatastore(Datastore):
         # See also https://stackoverflow.com/a/17267423
         # See also https://stackoverflow.com/a/30118648
         self.cursor.execute(
-            "INSERT INTO data_sync_revisions (datastore_id, sequence_id)"
-            " VALUES (%s, 0)"
-            " ON CONFLICT DO NOTHING", (self.id,))
+            'INSERT INTO data_sync_revisions (datastore_id, sequence_id)'
+            ' VALUES (%s, 0)'
+            ' ON CONFLICT DO NOTHING', (self.id,))
 
         # Check that the right tables exist
-        self.cursor.execute("SELECT sequence_id FROM data_sync_revisions")
+        self.cursor.execute('SELECT sequence_id FROM data_sync_revisions')
         self._sequence_id = self.cursor.fetchone()[0]
 
         # Get the column names for self.tablename
-        self.cursor.execute("SELECT * FROM %s LIMIT 0" % self.tablename)
+        self.cursor.execute('SELECT * FROM %s LIMIT 0' % self.tablename)
         self.columnnames = [desc[0] for desc in self.cursor.description]
         # self.nonid_columnnames = [name for name in self.columnnames
         #                           if name != _ID]
@@ -520,8 +527,8 @@ class PostgresDatastore(Datastore):
 
     def _set_sequence_id(self, the_id) -> None:
         self.cursor.execute(
-            "UPDATE data_sync_revisions set sequence_id = %s"
-            " RETURNING sequence_id", (the_id,))
+            'UPDATE data_sync_revisions set sequence_id = %s'
+            ' RETURNING sequence_id', (the_id,))
         new_val = self.cursor.fetchone()[0]
         super()._set_sequence_id(the_id)
         assert self._sequence_id == new_val, (
@@ -532,7 +539,7 @@ class PostgresDatastore(Datastore):
         doc = None
         # TODO: Use include_deleted in the query
         self.cursor.execute(
-            "SELECT * FROM %s WHERE _id=%%s" % self.tablename, (docid,))
+            'SELECT * FROM %s WHERE _id=%%s' % self.tablename, (docid,))
         docrow = self.cursor.fetchone()
         if docrow:
             doc = self._row_to_doc(docrow)
@@ -551,11 +558,11 @@ class PostgresDatastore(Datastore):
         assert _REV in doc
 
         # "ON CONFLICT" requires postgres 9.5+
-        set_statement = ', '.join("%s=EXCLUDED.%s " % (col, col)
+        set_statement = ', '.join('%s=EXCLUDED.%s ' % (col, col)
                                   for col in self.columnnames)
         upsert_statement = (
-            "INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (_id) DO UPDATE"
-            " SET %s" % (
+            'INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (_id) DO UPDATE'
+            ' SET %s' % (
                 self.tablename,
                 ','.join(self.columnnames),
                 ','.join([r'%s' for _ in self.columnnames]),
@@ -573,16 +580,16 @@ class PostgresDatastore(Datastore):
         allow syncing in chunks.
         """
         self.cursor.execute(
-            "SELECT * FROM %s WHERE %%s < _seq AND _seq <= %%s"
+            'SELECT * FROM %s WHERE %%s < _seq AND _seq <= %%s'
             % self.tablename, (the_seq, the_seq + num))
         docs = [self._row_to_doc(docrow) for docrow in self.cursor.fetchall()]
         return self.sequence_id, docs
 
     def _increment_sequence_id(self) -> int:
         self.cursor.execute(
-            "UPDATE data_sync_revisions set sequence_id = sequence_id+1"
-            " WHERE datastore_id=%s"
-            " RETURNING sequence_id", (self.id,))
+            'UPDATE data_sync_revisions set sequence_id = sequence_id+1'
+            ' WHERE datastore_id=%s'
+            ' RETURNING sequence_id', (self.id,))
         new_val = self.cursor.fetchone()[0]
         super()._increment_sequence_id()
         assert self._sequence_id == new_val, (

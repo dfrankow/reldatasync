@@ -1,4 +1,3 @@
-import functools
 import logging
 import os
 import random
@@ -28,7 +27,7 @@ class _TestDatastore(unittest.TestCase):
         if self.__class__ == _TestDatastore:
             # Skipping here allows us to derive _TestDatastore from TestCase
             # See also https://stackoverflow.com/a/35304339
-            self.skipTest("Skip base class test (_TestDatastore)")
+            self.skipTest('Skip base class test (_TestDatastore)')
 
     def assert_equals_no_seq(self, ds1, ds2):
         self.assertTrue(ds1.equals_no_seq(ds2))
@@ -283,13 +282,13 @@ class _TestDatastore(unittest.TestCase):
             Document({_ID: 'D', 'value': 'val5'}), increment_rev=True)
 
         # pull server <= client
-        logger.debug("*** pull server <= client")
+        logger.debug('*** pull server <= client')
         self.server.pull_changes(self.client)
         # pull client <= third
-        logger.debug("*** pull client <= third")
+        logger.debug('*** pull client <= third')
         self.client.pull_changes(self.third)
         # pull server <= client
-        logger.debug("*** pull server <= client")
+        logger.debug('*** pull server <= client')
         self.server.pull_changes(self.client)
 
         # third only has C and D, since nothing pushed to it
@@ -297,12 +296,12 @@ class _TestDatastore(unittest.TestCase):
             Document({_ID: 'C', 'value': 'val3',
                       _REV: str(VectorClock({self.third.id: 1})),
                       _SEQ: 1}),
-                         self.third.get('C'))
+            self.third.get('C'))
         self.assertEqual(
             Document({_ID: 'D', 'value': 'val5',
                       _REV: str(VectorClock({self.third.id: 2})),
                       _SEQ: 2}),
-                         self.third.get('D'))
+            self.third.get('D'))
 
         # now server has all of third's docs even though they never synced,
         # because server got third's changes through client
@@ -343,7 +342,7 @@ class _TestDatastore(unittest.TestCase):
     @staticmethod
     def _some_datastore_mods(datastore, items):
         num_steps = random.randint(2, 30)
-        for idx in range(num_steps):
+        for _ in range(num_steps):
             # pick item
             item = random.choice(items)
             if random.uniform(0, 1) < 0.3:
@@ -356,7 +355,7 @@ class _TestDatastore(unittest.TestCase):
     def test_long_streaks(self):
         items = ['a', 'b', 'c', 'd', 'e']
 
-        for jdx in range(32):
+        for _ in range(32):
             # some mods for server, then client
             _TestDatastore._some_datastore_mods(self.server, items)
             _TestDatastore._some_datastore_mods(self.client, items)
@@ -411,7 +410,7 @@ def _dbconnstr(dbname=None):
     host = os.getenv('POSTGRES_HOST', 'localhost')
     user = os.getenv('POSTGRES_USER', 'postgres')
     password = os.getenv('POSTGRES_PASSWORD', None)
-    the_str = f"host={host} user={user}"
+    the_str = f'host={host} user={user}'
     if dbname:
         the_str += f' dbname={dbname}'
     if password:
@@ -450,12 +449,12 @@ def _create_test_db(dbname):
 def _create_test_db1(dbname):
     def exec_func(curs):
         curs.execute(
-            "SELECT datname FROM pg_catalog.pg_database WHERE datname = %s",
+            'SELECT datname FROM pg_catalog.pg_database WHERE datname = %s',
             (dbname,))
         if not curs.fetchone():
-            curs.execute("CREATE DATABASE %s" % dbname)
+            curs.execute('CREATE DATABASE %s' % dbname)
         else:
-            logger.info("database %s already exists" % dbname)
+            logger.info('database %s already exists' % dbname)
     exec_sql(exec_func, autocommit=True)
 
 
@@ -464,11 +463,11 @@ def _create_table_if_not_exists(dbname: str, tablename: str,
     def exec_func(curs):
         # check for table existence
         curs.execute(
-            "select * from information_schema.tables where table_name=%s",
+            'select * from information_schema.tables where table_name=%s',
             (tablename,))
         if not bool(curs.fetchone()):
             # table doesn't exist, create it
-            curs.execute("CREATE TABLE %s (%s)" % (tablename, definition))
+            curs.execute('CREATE TABLE %s (%s)' % (tablename, definition))
     exec_sql(exec_func, dbname=dbname)
 
 
@@ -494,14 +493,14 @@ def _create_test_tables(dbname):
 
 def _clear_tables(dbname):
     def exec_func(curs):
-        curs.execute("DELETE FROM data_sync_revisions")
-        curs.execute("DELETE FROM docs1")
-        curs.execute("DELETE FROM docs2")
+        curs.execute('DELETE FROM data_sync_revisions')
+        curs.execute('DELETE FROM docs1')
+        curs.execute('DELETE FROM docs2')
     exec_sql(exec_func, dbname=dbname)
 
 
 def _drop_db(dbname):
-    exec_sql(lambda curs: curs.execute("DROP DATABASE %s" % dbname))
+    exec_sql(lambda curs: curs.execute('DROP DATABASE %s' % dbname))
 
 
 def _create_databases(cls, same_db):

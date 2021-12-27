@@ -31,8 +31,8 @@ class RestClientSourceDatastore(Datastore):
         return ret
 
     def put(self, doc: Document, increment_rev=False) -> int:
-        logger.debug(f"RCSD {self.table}: put doc {doc}"
-                     f" increment_rev {increment_rev}")
+        logger.debug(f'RCSD {self.table}: put doc {doc}'
+                     f' increment_rev {increment_rev}')
         resp = requests.post(
             self._server_url(self.table + '/doc'),
             params={'increment_rev': increment_rev},
@@ -70,7 +70,7 @@ def main():
 
     util.basic_config(os.getenv('LOG_LEVEL', args.log_level))
 
-    base_url = "http://" + args.server_url
+    base_url = 'http://' + args.server_url
 
     def server_url(url):
         return base_url + url
@@ -84,7 +84,7 @@ def main():
     assert resp.status_code == 200
     ct = resp.headers['content-type']
     assert ct == 'text/html; charset=utf-8', f"content type '{ct}'"
-    assert resp.text == ""
+    assert resp.text == ''
 
     # Check for non-existent table2
     resp = requests.get(server_url('table2'))
@@ -100,9 +100,9 @@ def main():
     assert js['current_sequence_id'] == 0
 
     # Put three docs in table1
-    d1 = Document({"_id": '1', "var1": "value1"})
-    d2 = Document({"_id": '2', "var1": "value2"})
-    d3 = Document({"_id": '3', "var1": "value3"})
+    d1 = Document({'_id': '1', 'var1': 'value1'})
+    d2 = Document({'_id': '2', 'var1': 'value2'})
+    d3 = Document({'_id': '3', 'var1': 'value3'})
     data = [d1, d2, d3]
     resp = requests.post(
         server_url('table1/docs'),
@@ -147,9 +147,9 @@ def main():
     ds = MemoryDatastore('client')
     # this id '1' will be different from table1 above, because we are
     # putting it in a different datastore with increment_rev=True
-    d1a = Document({"_id": '1', "var1": "value1a"})
-    d4 = Document({"_id": '4', "var1": "value4"})
-    d5 = Document({"_id": '5', "var1": "value5"})
+    d1a = Document({'_id': '1', 'var1': 'value1a'})
+    d4 = Document({'_id': '4', 'var1': 'value4'})
+    d5 = Document({'_id': '5', 'var1': 'value5'})
     for doc in [d1a, d4, d5]:
         ds.put(Document(doc), increment_rev=True)
         assert ds.get(doc[_ID])

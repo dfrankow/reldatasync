@@ -20,7 +20,7 @@ def _get_datastore(table, autocreate=True):
 
 
 def create_app():
-    logging.info("SERVER STARTING")
+    logging.info('SERVER STARTING')
     app = Flask(__name__)
 
 # @app.route('/shutdown', methods=['GET'])
@@ -46,17 +46,17 @@ def create_app():
             _ = _get_datastore(table)
             # TODO: Return Location header of new resource
             # See also https://restfulapi.net/http-methods/#post
-            return Response("", status=201)
+            return Response('', status=201)
         elif request.method == 'GET':
             if table not in datastores:
                 abort(404)
 
-        return ""
+        return ''
 
     @app.route('/<table>/sequence_id/<source>', methods=['GET'],
                defaults={'sequence_id': None})
     @app.route('/<table>/sequence_id/<source>/<sequence_id>', methods=['POST'])
-    def sequence_id_func(table, source, sequence_id:int):
+    def sequence_id_func(table, source, sequence_id: int):
         datastore = _get_datastore(table, autocreate=False)
         if not datastore:
             abort(404)

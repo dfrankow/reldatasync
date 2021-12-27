@@ -15,4 +15,4 @@ def basic_config(level):
     """basicConfig with a standard logging format"""
     logging.basicConfig(
         level=level,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+        format='%(asctime)s %(levelname)s %(name)s: %(message)s')
