@@ -10,6 +10,7 @@ from typing import Sequence, Tuple
 from reldatasync import util
 from reldatasync.datastore import Datastore, MemoryDatastore
 from reldatasync.document import Document, ID_TYPE, _ID
+from reldatasync.replicator import Replicator
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +157,7 @@ def main():
 
     # Sync local datastore with remote table1
     remote_ds = RestClientSourceDatastore(base_url, 'table1')
-    ds.sync_both_directions(remote_ds)
+    Replicator(ds, remote_ds).sync_both_directions()
 
     # Check that table1 and table2 have the same things
     assert ds.equals_no_seq(remote_ds)

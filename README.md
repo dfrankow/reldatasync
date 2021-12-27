@@ -53,9 +53,12 @@ for example section 4.4 ("Data Versioning") of [Dynamo: Amazon’s
 Highly Available Key-value
 Store](https://www.allthingsdistributed.com/2007/10/amazons_dynamo.html).
 
-[Cloud Firestore](https://firebase.google.com/products/firestore/) is a
-product that handles synchronization including an offline mode.  However,
-it is a NoSQL data store.
+[Cloud Firestore](https://firebase.google.com/products/firestore/) is
+a product that handles synchronization including [an offline
+mode](https://firebase.google.com/docs/database/android/offline-capabilities#section-offline-behavior).
+(See [this stackoverflow post](https://stackoverflow.com/a/52912231)
+for more information about conflict resolution.)  However, it is a
+NoSQL data store.
 
 [AMPLI-SYNC](https://github.com/sqlite-sync/SQLite-sync.com) looks very
 close to what I want, but it requires Tomcat (a Java server), and I want
