@@ -35,6 +35,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         all_docids = set()
         all_seqs = set()
         max_seq, docs = self.get_docs_since(0, max_size)
+        doc_max_seq = 0
         for doc in docs:
             docid = doc.get(_ID, '?')
 
@@ -56,9 +57,18 @@ class Datastore(Generic[ID_TYPE], ABC):
                 logger.warning(f'docid {docid} has repeated seq {seq}')
             all_seqs.add(seq)
 
+            if seq > doc_max_seq:
+                doc_max_seq = seq
+
             if not (0 < doc[_SEQ] <= max_seq):
                 logger.warning(f'doc {docid} has seq out of bounds {seq}')
                 ret = False
+
+        if max_seq != doc_max_seq:
+            logger.warning(
+                f"doc_max_seq {doc_max_seq} max_seq reported {max_seq}")
+            ret = False
+
         return ret
 
     def equals_no_seq(self, other: 'Datastore', max_docs: int = 1000):

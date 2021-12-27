@@ -160,6 +160,8 @@ def main():
 
     # Check that table1 and table2 have the same things
     assert ds.equals_no_seq(remote_ds)
+    ds.check()
+    remote_ds.check()
 
 
 if __name__ == '__main__':
