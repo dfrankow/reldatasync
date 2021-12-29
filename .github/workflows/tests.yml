@@ -51,7 +51,7 @@ jobs:
     - name: Run tests
       run: |
         cd python
-        python setup.py test
+        LOG_LEVEL=DEBUG python setup.py test
       env:
         POSTGRES_USER: postgres
         POSTGRES_PASSWORD: postgres
