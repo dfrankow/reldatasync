@@ -15,6 +15,8 @@ import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
+import dj_database_url
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -79,10 +81,13 @@ WSGI_APPLICATION = 'rsdb.wsgi.application'
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    # A test database will be created called test_DB
+    # where DB is whatever comes from the default config
+
+    # Parse default database configuration from $DATABASE_URL
+    # See https://devcenter.heroku.com/articles/django-app-configuration
+    # See https://github.com/jacobian/dj-database-url#url-schema
+    'default': dj_database_url.config(conn_max_age=500)
 }
 
 
