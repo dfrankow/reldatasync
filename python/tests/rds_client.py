@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-import os
 
 import requests
 from typing import Sequence, Tuple
