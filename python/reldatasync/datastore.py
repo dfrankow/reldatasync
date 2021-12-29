@@ -1,12 +1,12 @@
 """An abstraction of a datastore, to use for syncing."""
 import functools
-import uuid
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 import logging
 
 from typing import Sequence, Generic, Tuple
 
+from reldatasync import util
 from reldatasync.document import Document, _REV, _ID, _DELETED, ID_TYPE, _SEQ
 from reldatasync.vectorclock import VectorClock
 
@@ -26,7 +26,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         self.name = datastore_name
         self.id = datastore_id
         if not self.id:
-            self.id = str(uuid.uuid4()).replace('-', '')
+            self.id = util.uuid4_string()
         self._sequence_id = 0
         self.peer_seq_ids = {}
 
