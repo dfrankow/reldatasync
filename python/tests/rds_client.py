@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-import os
 
 import requests
 from typing import Sequence, Tuple
@@ -69,7 +68,7 @@ def main():
                         help='Log level')
     args = parser.parse_args()
 
-    util.basic_config(os.getenv('LOG_LEVEL', args.log_level))
+    util.logging_basic_config(level=args.log_level)
 
     base_url = 'http://' + args.server_url
 

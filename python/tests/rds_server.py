@@ -113,7 +113,7 @@ def create_app():
 
 
 if __name__ == '__main__':
-    util.basic_config(logging.WARNING)
+    util.logging_basic_config()
 
     app = create_app()
     app.run()

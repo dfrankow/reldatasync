@@ -3,10 +3,10 @@ import functools
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 import logging
-import psycopg2
 
 from typing import Sequence, Generic, Tuple
 
+from reldatasync import util
 from reldatasync.document import Document, _REV, _ID, _DELETED, ID_TYPE, _SEQ
 from reldatasync.vectorclock import VectorClock
 
@@ -14,8 +14,19 @@ logger = logging.getLogger(__name__)
 
 
 class Datastore(Generic[ID_TYPE], ABC):
-    def __init__(self, datastore_id: str):
+    def __init__(self, datastore_name: str, datastore_id: str = None):
+        """Init a datastore.
+
+        :param  datastore_name  Human-readable name
+        :param  datastore_id  Unique identifier, used in revisions
+                              Don't set the id unless you are sure.
+                              If you have two datastores with the same id,
+                              it won't be good.
+        """
+        self.name = datastore_name
         self.id = datastore_id
+        if not self.id:
+            self.id = util.uuid4_string()
         self._sequence_id = 0
         self.peer_seq_ids = {}
 
@@ -125,6 +136,16 @@ class Datastore(Generic[ID_TYPE], ABC):
         rev = VectorClock.from_string(doc.get(_REV, '{}'))
         rev.set_clock(self.id, seq_id)
         doc[_REV] = str(rev)
+
+    def new_rev_and_seq(self, rev_str):
+        """Get a new rev and seq for use saving without the 'put' method."""
+        seq_id = self._increment_sequence_id()
+
+        if not rev_str:
+            rev_str = '{}'
+        rev = VectorClock.from_string(rev_str)
+        rev.set_clock(self.id, seq_id)
+        return str(rev), seq_id
 
     def put(self, doc: Document, increment_rev=False) -> int:
         """Put doc under docid if rev is greater, or doc doesn't currently exist
@@ -246,8 +267,8 @@ class Datastore(Generic[ID_TYPE], ABC):
 
 class MemoryDatastore(Datastore):
     """An in-memory transient datastore, only useful for testing."""
-    def __init__(self, datastore_id: str):
-        super().__init__(datastore_id)
+    def __init__(self, datastore_name: str, datastore_id: str = None):
+        super().__init__(datastore_name, datastore_id)
         self.datastore = OrderedDict()
 
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
@@ -296,15 +317,14 @@ class MemoryDatastore(Datastore):
 
 
 class PostgresDatastore(Datastore):
-    def __init__(self, datastore_id: str, conn_str: str,
-                 tablename: str):
-        super().__init__(datastore_id)
+    def __init__(self, datastore_name: str, conn, tablename: str,
+                 datastore_id: str = None):
+        super().__init__(datastore_name, datastore_id)
         self.tablename = tablename
-        self.conn_str = conn_str
+        self.conn = conn
 
     def __enter__(self):
         super().__enter__()
-        self.conn = psycopg2.connect(self.conn_str)
 
         # TODO: What exactly is our commit policy?
         # self.conn.set_isolation_level(
@@ -312,16 +332,17 @@ class PostgresDatastore(Datastore):
 
         self.cursor = self.conn.cursor()
 
-        # TODO: Create the data_sync_revisions table if needed
+        # TODO: Create the data_sync_revisions table if needed?
 
         # Init sequence_id if not present
         # "ON CONFLICT" requires postgres 9.5+
         # See also https://stackoverflow.com/a/17267423
         # See also https://stackoverflow.com/a/30118648
         self.cursor.execute(
-            'INSERT INTO data_sync_revisions (datastore_id, sequence_id)'
-            ' VALUES (%s, 0)'
-            ' ON CONFLICT DO NOTHING', (self.id,))
+            'INSERT INTO data_sync_revisions'
+            ' (datastore_id, datastore_name, sequence_id)'
+            ' VALUES (%s, %s, 0)'
+            ' ON CONFLICT DO NOTHING', (self.id, self.name))
 
         # Check that the right tables exist
         self.cursor.execute('SELECT sequence_id FROM data_sync_revisions')
@@ -352,8 +373,6 @@ class PostgresDatastore(Datastore):
         super().__exit__()
         if self.cursor:
             self.cursor.close()
-        if self.conn:
-            self.conn.close()
 
     def _row_to_doc(self, docrow) -> Document:
         the_dict = {}
@@ -366,6 +385,9 @@ class PostgresDatastore(Datastore):
         return Document(the_dict)
 
     def _set_sequence_id(self, the_id) -> None:
+        # The RETURNING syntax has been supported by Postgres at least
+        # since 9.5.
+        # SQLite started supporting it in version 3.35.0 (2021-03-12).
         self.cursor.execute(
             'UPDATE data_sync_revisions set sequence_id = %s'
             ' RETURNING sequence_id', (the_id,))
