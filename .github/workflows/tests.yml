@@ -51,7 +51,11 @@ jobs:
     - name: Run tests
       run: |
         cd python
+        # For debugging, uncomment LOG_LEVEL=DEBUG:
+        # LOG_LEVEL=DEBUG python setup.py test
         LOG_LEVEL=DEBUG python setup.py test
+        # Install library for Django:
+        python setup.py install
       env:
         POSTGRES_USER: postgres
         POSTGRES_PASSWORD: postgres
