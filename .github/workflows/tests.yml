@@ -57,6 +57,7 @@ jobs:
         POSTGRES_PASSWORD: postgres
         POSTGRES_HOST: localhost
     - name: Run Django tests
+      run: |
         cd django
         pip install -r requirements.txt --use-feature=2020-resolver
         # python manage.py collectstatic --noinput
