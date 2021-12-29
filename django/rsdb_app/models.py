@@ -50,6 +50,15 @@ class SyncableModel(models.Model):
             self._deleted = False
         super().save(*args, **kwargs)
 
+    def delete(self, *args, **kwargs):
+        """Instead of removing the row, update it with _deleted True"""
+        conn = connections['default']
+        with self._get_datastore(conn) as pd:
+            # Set _REV, _SEQ, _DELETED properly
+            self._rev, self._seq = pd.new_rev_and_seq(self._rev)
+            self._deleted = True
+        # Don't call super().delete(), since we want to keep the row
+
     class Meta:
         # See https://docs.djangoproject.com/en/4.0/topics/db/models/#abstract-base-classes  # noqa
         abstract = True

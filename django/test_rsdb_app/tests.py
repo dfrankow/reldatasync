@@ -26,3 +26,11 @@ class PatientTest(TestCase):
         self.assertEqual(2, pat._seq)
         self.assertGreater(
             VectorClock.from_string(pat._rev), VectorClock.from_string(rev))
+
+        # Delete pat, seq and rev go up, and row is still there _deleted True
+        rev = pat._rev
+        pat.delete()
+        self.assertEqual(3, pat._seq)
+        self.assertTrue(pat._deleted)
+        self.assertGreater(
+            VectorClock.from_string(pat._rev), VectorClock.from_string(rev))
