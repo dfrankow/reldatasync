@@ -375,7 +375,7 @@ class _TestDatastore(unittest.TestCase):
                     Document({_ID: item, 'value': val}), increment_rev=True)
 
     def test_long_streaks(self):
-        items = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']
+        items = [f'item{num}' for num in range(100)]
 
         for _ in range(16):
             # some mods for server, client, third
