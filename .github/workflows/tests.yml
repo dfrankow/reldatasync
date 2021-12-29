@@ -69,7 +69,7 @@ jobs:
       env:
         # Variables for unit tests
         # must match postgres service above
-        # DATABASE_URL: postgres://postgres:postgres@localhost:5432/default
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/default
         SECRET_KEY: this-has-to-be-at-least-51-characters-and-6-unique-ones
     - name: Run java tests
       run: |
