@@ -7,8 +7,15 @@ from test_rsdb_app.models import Patient
 class PatientTest(TestCase):
     def test_create(self):
         name = 'Yoinks'
-        pat = Patient(name=name, residence='Yoinkers', age=30)
+        residence = 'Yoinkers'
+        age = 30
+        pat = Patient(name=name, residence=residence, age=age)
         pat.save()
+
+        # Regular vars are still set
+        self.assertEqual(name, pat.name)
+        self.assertEqual(residence, pat.residence)
+        self.assertEqual(age, pat.age)
 
         # Syncable model vars are set
         self.assertEqual(1, pat._seq)
