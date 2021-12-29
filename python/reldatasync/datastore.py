@@ -385,6 +385,9 @@ class PostgresDatastore(Datastore):
         return Document(the_dict)
 
     def _set_sequence_id(self, the_id) -> None:
+        # The RETURNING syntax has been supported by Postgres at least
+        # since 9.5.
+        # SQLite started supporting it in version 3.35.0 (2021-03-12).
         self.cursor.execute(
             'UPDATE data_sync_revisions set sequence_id = %s'
             ' RETURNING sequence_id', (the_id,))
