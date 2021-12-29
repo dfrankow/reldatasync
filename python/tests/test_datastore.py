@@ -15,7 +15,7 @@ from reldatasync.vectorclock import VectorClock
 logger = logging.getLogger(__name__)
 
 # Get log level from environment so we can set it for python -m unittest
-util.basic_config(os.getenv('LOG_LEVEL', 'WARNING'))
+util.logging_basic_config()
 
 
 class _TestDatastore(unittest.TestCase):

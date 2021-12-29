@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import os
 import uuid
 
 
@@ -17,8 +18,12 @@ def uuid4_string():
     return str(uuid.uuid4()).replace('-', '')
 
 
-def basic_config(level):
-    """basicConfig with a standard logging format"""
+def logging_basic_config(level=None):
+    """basicConfig with a standard logging format.
+
+    If level is not given, default to env var LOG_LEVEL, or WARNING."""
+    if not level:
+        level = os.getenv('LOG_LEVEL', 'WARNING')
     logging.basicConfig(
         level=level,
         format='%(asctime)s %(levelname)s %(name)s: %(message)s')
