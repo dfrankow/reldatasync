@@ -375,22 +375,33 @@ class _TestDatastore(unittest.TestCase):
                     Document({_ID: item, 'value': val}), increment_rev=True)
 
     def test_long_streaks(self):
-        items = ['a', 'b', 'c', 'd', 'e']
+        items = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l']
 
         for _ in range(16):
-            # some mods for server, then client
-            _TestDatastore._some_datastore_mods(self.server, items)
-            _TestDatastore._some_datastore_mods(self.client, items)
+            # some mods for server, client, third
+            # shuffle them so that one doesn't always win (by highest seq)
+            dss = [self.server, self.client, self.third]
+            random.shuffle(dss)
+            for ds in dss:
+                _TestDatastore._some_datastore_mods(ds, items)
 
-            # sync
-            # use small chunk size to test multiple chunks
-            Replicator(self.client, self.server, chunk_size=2
-                       ).sync_both_directions()
+            # sync in pairwise steps between the three datastores
+            all_pairs = [[self.client, self.server],
+                         [self.client, self.third],
+                         [self.server, self.third]]
+            random.shuffle(all_pairs)
+            for pair in all_pairs:
+                Replicator(pair[0], pair[1],
+                           # use small chunk size to test multiple chunks
+                           chunk_size=2).sync_both_directions()
 
             # server and client should now contain the same stuff
             self.assert_equals_no_seq(self.client, self.server)
+            self.assert_equals_no_seq(self.client, self.third)
+            self.assert_equals_no_seq(self.server, self.third)
             self.assertTrue(self.client.check())
             self.assertTrue(self.server.check())
+            self.assertTrue(self.third.check())
 
     def test_copy(self):
         doc = Document({_ID: 'A', 'value': 'val1'})
