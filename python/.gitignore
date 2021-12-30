@@ -9,7 +9,3 @@ dist/
 
 # Download directory for setuptools
 .eggs/
-
-# I use these files to hold env vars I don't want to check in
-local-vars.sh
-local-all.sh
