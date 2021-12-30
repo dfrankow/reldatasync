@@ -30,7 +30,14 @@ class JsonEncoder:
 
 class JsonDecoder:
     def __init__(self, schema=None):
-        """Decode with a schema, which is a map of field to type name."""
+        """Decode with a schema, which is a map of field to type name.
+
+        # NOTE: the schema is strongly based on sqlite3,
+        # but adds boolean and datetime
+        # See also https://www.sqlite.org/datatype3.html.
+
+        Current types: INTEGER, REAL, TEXT, BOOLEAN, DATE, DATETIME.
+        """
         self.schema = schema
 
     def decode(self, json_str):
