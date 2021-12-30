@@ -123,6 +123,7 @@ class _TestDatastore(unittest.TestCase):
         num, new_doc = self.server.put(doc, increment_rev=True)
         self.assertEqual(1, num)
         self.assertEqual('val2', new_doc['value'])
+        self.assertEqual(self.server.get('A'), new_doc)
 
     def test_overlapping_sync(self):
         """Overlapping documents from datastore"""
