@@ -8,60 +8,62 @@ from reldatasync.json import JsonEncoder, JsonDecoder
 from reldatasync.replicator import Replicator
 from reldatasync.vectorclock import VectorClock
 
-from test_rsdb_app.models import Patient
+from test_rsdb_app.models import Patient, Organization
 
 
 class PatientTest(TestCase):
+    def _create_org(self):
+        self.org = Organization(name='org')
+        self.org.save()
+
     def _create_patient(self):
-        name = 'Yoinks'
-        residence = 'Yoinkers'
-        age = 30
-        birth_date = datetime.strptime('2021-01-03', '%Y-%m-%d').date()
+        self._create_org()
+        self.name = 'Yoinks'
+        self.residence = 'Yoinkers'
+        self.age = 30
+        self.birth_date = datetime.strptime('2021-01-03', '%Y-%m-%d').date()
         # test that EmailField (derived from CharField) works
-        email = 'yoinks@example.com'
-        self.patient = Patient(name=name, residence=residence, age=age,
-                               birth_date=birth_date, email=email)
+        self.email = 'yoinks@example.com'
+        self.patient = Patient(
+            name=self.name, residence=self.residence, age=self.age,
+            birth_date=self.birth_date, email=self.email,
+            org=self.org)
         self.patient.save()
 
     def test_create_delete(self):
-        name = 'Yoinks'
-        residence = 'Yoinkers'
-        age = 30
-        birth_date = datetime.strptime('2021-01-03', '%Y-%m-%d').date()
-        email = 'yoinks@example.com'
-        pat = Patient(name=name, residence=residence, age=age,
-                      birth_date=birth_date, email=email)
-        pat.save()
+        self._create_patient()
+        pat = self.patient
 
         # Regular vars are still set
-        self.assertEqual(name, pat.name)
-        self.assertEqual(residence, pat.residence)
-        self.assertEqual(age, pat.age)
+        self.assertEqual(self.name, pat.name)
+        self.assertEqual(self.residence, pat.residence)
+        self.assertEqual(self.age, pat.age)
         self.assertTrue(pat.created_dt)
-        self.assertEqual(birth_date, pat.birth_date)
-        self.assertEqual(email, pat.email)
+        self.assertEqual(self.birth_date, pat.birth_date)
+        self.assertEqual(self.email, pat.email)
+        self.assertEqual(self.org, pat.org)
 
         # Syncable model vars are set
-        self.assertEqual(1, pat._seq)
+        self.assertEqual(2, pat._seq)
         self.assertTrue(pat._id)
         self.assertTrue(pat._rev)
         self.assertGreater(VectorClock.from_string(pat._rev), VectorClock({}))
         self.assertFalse(pat._deleted)
 
-        pat2 = Patient.objects.get(name=name)
+        pat2 = Patient.objects.get(name=self.name)
         self.assertEqual(pat, pat2)
 
         # Update pat, seq and rev go up
         rev = pat._rev
         pat.save()
-        self.assertEqual(2, pat._seq)
+        self.assertEqual(3, pat._seq)
         self.assertGreater(
             VectorClock.from_string(pat._rev), VectorClock.from_string(rev))
 
         # Delete pat, seq and rev go up, and row is still there _deleted True
         rev = pat._rev
         pat.delete()
-        self.assertEqual(3, pat._seq)
+        self.assertEqual(4, pat._seq)
         self.assertTrue(pat._deleted)
         self.assertGreater(
             VectorClock.from_string(pat._rev), VectorClock.from_string(rev))
@@ -88,6 +90,11 @@ class PatientTest(TestCase):
             # In with Datastore.put
             ds.put(pat2, increment_rev=True)
 
+            # There are two patients with the same org, one from put()
+            pats = [
+                pat for pat in Patient.objects.filter(org__name=self.org.name)]
+            self.assertEqual(2, len(pats))
+
             # Out with Django
             pat3 = Patient.objects.get(_id=id_str)
 
@@ -105,12 +112,18 @@ class PatientTest(TestCase):
             self.assertEqual(pat.created_dt, pat3.created_dt)
             self.assertEqual(pat.birth_date, pat3.birth_date)
             self.assertEqual(pat.email, pat3.email)
+            self.assertEqual(pat.org, pat3.org)
 
     def test_sync(self):
         self._create_patient()
         pat = self.patient
 
         dsm = MemoryDatastore('test')
+
+        # Could synchronize org with a different datastore
+        # with Organization._get_datastore() as ds:
+        #     Replicator(ds, org_dsm).sync_both_directions()
+
         with Patient._get_datastore() as ds:
             Replicator(ds, dsm).sync_both_directions()
 
@@ -119,8 +132,14 @@ class PatientTest(TestCase):
             # check fields
             # pat3 datastore fields are all proper
             for field in (
-                    '_id', '_seq', '_rev', '_deleted',
-                    'name', 'residence', 'age', 'created_dt', 'birth_date'):
+                    '_id',
+                    # _seq is different: dsm has only patients, while Patient's
+                    # datastore has orgs and patients (in different tables).
+                    # _seq can be different for different datastores, it's local
+                    # '_seq',
+                    '_rev', '_deleted',
+                    'name', 'residence', 'age', 'created_dt', 'birth_date',
+                    'org_id'):
                 self.assertEqual(getattr(pat, field), pat2[field])
 
     def test_json_dumps(self):
@@ -136,14 +155,15 @@ class PatientTest(TestCase):
             self.assertEqual(
                 f'{{"_id": "{spat._id}", '
                 f'"_rev": {json.dumps(spat._rev)}, '
-                '"_seq": 1, '
+                '"_seq": 2, '
                 '"_deleted": false, '
                 '"name": "Yoinks", '
                 '"residence": "Yoinkers", '
                 '"age": 30, '
                 '"birth_date": "2021-01-03", '
                 f'"created_dt": "{spat.created_dt.isoformat()}", '
-                '"email": "yoinks@example.com"}',
+                '"email": "yoinks@example.com", '
+                f'"org_id": "{self.org._id}"}}',
                 pat_str)
 
             # The datetime has a format like this, ending in +00:00
@@ -167,6 +187,7 @@ class PatientTest(TestCase):
                 'birth_date': 'DATE',
                 'created_dt': 'DATETIME',
                 'email': 'TEXT',
+                'org_id': 'TEXT',
             }
             pat2 = JsonDecoder(schema=schema).decode(pat_str)
             self.assertEqual(pat, pat2)
