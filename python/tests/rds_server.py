@@ -9,6 +9,8 @@ import logging
 
 from reldatasync.document import Document
 
+logger = logging.getLogger(__name__)
+
 datastores = {}
 
 
@@ -80,16 +82,20 @@ def create_app():
         elif request.method == 'POST':
             # put docs
             num_put = 0
+            new_docs = []
             try:
                 for the_doc in request.json:
                     increment_rev = (
                             request.args.get('increment_rev', False) == 'True')
-                    num_put += datastore.put(
+                    num, new_doc = datastore.put(
                         Document(the_doc), increment_rev=increment_rev)
+                    num_put += num
+                    new_docs.append(new_doc)
             except ValueError as err:
                 return str(err), 422
             # TODO: should response have docs with clocks set?  I think yes.
-            return {'num_docs_put': num_put}
+            return {'num_docs_put': num_put,
+                    'documents': new_docs}
 
     @app.route('/<table>/doc/<docid>', methods=['GET'])
     @app.route('/<table>/doc', methods=['POST'],
@@ -105,9 +111,10 @@ def create_app():
             return ret
         elif request.method == 'POST':
             increment_rev = request.args.get('increment_rev', False) == 'True'
-            num_put = datastore.put(
+            num_put, new_doc = datastore.put(
                 Document(request.json), increment_rev=increment_rev)
-            return {'num_docs_put': num_put}
+            return {'num_docs_put': num_put,
+                    'document': new_doc}
 
     return app
 
