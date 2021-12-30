@@ -18,7 +18,10 @@ class Patient(SyncableModel):
     birth_date = models.DateField()
     created_dt = models.DateTimeField(default=timezone.now)
     email = models.EmailField()
-    org = models.ForeignKey(Organization, on_delete=models.CASCADE)
+    org = models.ForeignKey(
+        Organization,
+        # Can't use CASCADE, because that wouldn't properly delete
+        on_delete=models.PROTECT)
 
     class DatastoreMeta:
         datastore_name = 'rsdb_server'
