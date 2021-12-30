@@ -379,8 +379,8 @@ class PostgresDatastore(Datastore):
         assert len(docrow) == len(self.columnnames)
         for idx in range(len(docrow)):
             the_dict[self.columnnames[idx]] = docrow[idx]
-        # Treat '_deleted' specially: get rid of it unless True
-        if not the_dict[_DELETED]:
+        # Treat '_deleted' specially: get rid of it if it's None
+        if the_dict[_DELETED] is None:
             del the_dict[_DELETED]
         return Document(the_dict)
 

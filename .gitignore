@@ -4,6 +4,9 @@
 # My tmp dirs
 tmp/
 
+# I use this files to hold env vars I don't want to check in
+local-all.sh
+
 # python files
 __pycache__/
 *.sqlite3
