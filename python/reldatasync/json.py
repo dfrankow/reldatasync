@@ -20,8 +20,9 @@ def _json_serial(obj):
         # date objects don't have timezone
         # https://docs.python.org/3/library/datetime.html#aware-and-naive-objects  # noqa
         #
-        # Example of aware format: 2021-12-30T17:07:27.918653+00:00
-        # Example of naive format: 2021-12-30T17:07:27.918653
+        # Example of aware datetime format: 2021-12-30T17:07:27.918653+00:00
+        # Example of naive datetime format: 2021-12-30T17:07:27.918653
+        # Example of date format: 2021-12-30
         return obj.isoformat()
     raise TypeError('Type %s not serializable' % type(obj))
 
