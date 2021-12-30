@@ -22,10 +22,14 @@ class SyncableModel(models.Model):
         unique=True, primary_key=True, max_length=100,
         default=uuid4_string)
     _rev = models.CharField(max_length=2000)
+    _seq = models.IntegerField()
     _deleted = models.BooleanField()
 
     @classmethod
-    def _get_datastore(cls, conn):
+    def _get_datastore(cls, conn=None):
+        if not conn:
+            conn = connections['default']
+
         ds_name = cls.DatastoreMeta.datastore_name
         # get id for name if it exists
         ds_id = None
@@ -43,8 +47,7 @@ class SyncableModel(models.Model):
             datastore_id=ds_id)
 
     def save(self, *args, **kwargs):
-        conn = connections['default']
-        with self._get_datastore(conn) as pd:
+        with self._get_datastore() as pd:
             # Set _REV, _SEQ, _DELETED properly
             self._rev, self._seq = pd.new_rev_and_seq(self._rev)
             self._deleted = False
@@ -52,8 +55,7 @@ class SyncableModel(models.Model):
 
     def delete(self, *args, **kwargs):
         """Instead of removing the row, update it with _deleted True"""
-        conn = connections['default']
-        with self._get_datastore(conn) as pd:
+        with self._get_datastore() as pd:
             # Set _REV, _SEQ, _DELETED properly
             self._rev, self._seq = pd.new_rev_and_seq(self._rev)
             self._deleted = True
