@@ -10,6 +10,7 @@ class Patient(SyncableModel):
     age = models.IntegerField()
     birth_date = models.DateField()
     created_dt = models.DateTimeField(default=timezone.now)
+    email = models.EmailField()
 
     class DatastoreMeta:
         datastore_name = 'rsdb_server_patient'
