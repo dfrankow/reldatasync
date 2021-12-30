@@ -44,7 +44,7 @@ class JsonDecoder:
                     doc[key] = datetime.fromisoformat(val)
                 elif key_type == 'DATE':
                     doc[key] = datetime.fromisoformat(val).date()
-                elif key_type in ('INTEGER', 'REAL', 'TEXT'):
+                elif key_type in ('INTEGER', 'REAL', 'TEXT', 'BOOLEAN'):
                     # For now, the only types we parse are DATE and DATETIME
                     pass
                 else:

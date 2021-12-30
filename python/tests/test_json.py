@@ -31,6 +31,7 @@ class TestJson(unittest.TestCase):
                              'int': 3,
                              'real': 3.0,
                              'text': 'text',
+                             'boolean': False,
                              'date': self.dt_naive.date(),
                              'dt_naive': self.dt_naive,
                              'dt_aware': self.dt_aware,
@@ -44,6 +45,7 @@ class TestJson(unittest.TestCase):
             f' "int": 3,'
             f' "real": 3.0,'
             ' "text": "text",'
+            ' "boolean": false,'
             ' "date": "2021-01-03",'
             ' "dt_naive": "2021-01-03T00:00:00",'
             ' "dt_aware": "2021-02-04T13:10:03-06:00",'
@@ -62,6 +64,7 @@ class TestJson(unittest.TestCase):
             self.assertNotEqual(self.doc, doc)
         schema = {'_id': 'TEXT',
                   'int': 'INTEGER',
+                  'boolean': 'BOOLEAN',
                   'real': 'REAL',
                   'text': 'TEXT',
                   'date': 'DATE',
