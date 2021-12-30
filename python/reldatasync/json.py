@@ -30,7 +30,24 @@ class JsonEncoder:
 
 class JsonDecoder:
     def __init__(self, schema=None):
+        """Decode with a schema, which is a map of field to type name."""
         self.schema = schema
 
     def decode(self, json_str):
-        return json.loads(json_str)
+        doc = Document(json.loads(json_str))
+        if self.schema:
+            # Use the schema to decode
+            for key, val in doc.items():
+                key_type = self.schema[key]
+
+                if key_type == 'DATETIME':
+                    doc[key] = datetime.fromisoformat(val)
+                elif key_type == 'DATE':
+                    doc[key] = datetime.fromisoformat(val).date()
+                elif key_type in ('INTEGER', 'REAL', 'TEXT'):
+                    # For now, the only types we parse are DATE and DATETIME
+                    pass
+                else:
+                    raise ValueError(
+                        "Unknown schema type for {key}: '{key_type}'")
+        return doc
