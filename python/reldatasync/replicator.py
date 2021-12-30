@@ -43,7 +43,8 @@ class Replicator:
             source_seq_id, docs = source.get_docs_since(
                 new_peer_seq_id, chunk_size)
             for doc in docs:
-                docs_changed += destination.put(doc)
+                num, _new_doc = destination.put(doc)
+                docs_changed += num
 
             # This used to be true, but now it's not.  If the destination
             # ignores some things, then its sequence_id may not rise.

@@ -30,7 +30,7 @@ class RestClientSourceDatastore(Datastore):
             ret = resp.json()
         return ret
 
-    def put(self, doc: Document, increment_rev=False) -> int:
+    def put(self, doc: Document, increment_rev=False) -> Tuple[int, Document]:
         logger.debug(f'RCSD {self.table}: put doc {doc}'
                      f' increment_rev {increment_rev}')
         resp = requests.post(
@@ -39,7 +39,7 @@ class RestClientSourceDatastore(Datastore):
             json=doc)
         assert resp.status_code == 200, resp.status_code
         json = resp.json()
-        return json['num_docs_put']
+        return json['num_docs_put'], json['document']
 
     def get_docs_since(self, the_seq: int, num: int) -> Tuple[
             int, Sequence[Document]]:
@@ -113,6 +113,12 @@ def main():
     assert ct == 'application/json', f"content type '{ct}'"
     js = resp.json()
     assert js['num_docs_put'] == 3
+    assert 3 == len(js['documents'])
+    idx = 0
+    for doc in js['documents']:
+        idx += 1
+        assert str(idx) == doc['_id'], f"idx {idx} doc[_id] {doc['_id']}"
+        assert doc['_rev']
 
     # Put the same three docs in table1, num_docs_put==0
     # TODO: should we add increment_rev, and change server to check clocks?
@@ -120,8 +126,6 @@ def main():
     assert resp.status_code == 422, resp.status_code
     assert resp.content == b'doc 1 must have _rev if increment_rev is False', (
         resp.content)
-    # js = resp.json()
-    # assert js['num_docs_put'] == 0
 
     # Check three docs in table1
     resp = requests.get(server_url('table1/docs'))
@@ -151,8 +155,10 @@ def main():
     d4 = Document({'_id': '4', 'var1': 'value4'})
     d5 = Document({'_id': '5', 'var1': 'value5'})
     for doc in [d1a, d4, d5]:
-        ds.put(Document(doc), increment_rev=True)
-        assert ds.get(doc[_ID])
+        num, new_doc = ds.put(Document(doc), increment_rev=True)
+        assert num
+        assert new_doc
+        assert new_doc == ds.get(doc[_ID])
 
     # Sync local datastore with remote table1
     remote_ds = RestClientSourceDatastore(base_url, 'table1')

@@ -147,7 +147,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         rev.set_clock(self.id, seq_id)
         return str(rev), seq_id
 
-    def put(self, doc: Document, increment_rev=False) -> int:
+    def put(self, doc: Document, increment_rev=False) -> Tuple[int, Document]:
         """Put doc under docid if rev is greater, or doc doesn't currently exist
 
         Return number of records actually put (0 or 1).
@@ -209,7 +209,7 @@ class Datastore(Generic[ID_TYPE], ABC):
             logger.debug(f'{self.id}: Ignore docid {docid} doc {doc} rev {rev}'
                          f' inc_rec {increment_rev}'
                          f' (compared to doc {my_doc} my_rev {my_rev})')
-        return ret
+        return ret, doc
 
     def delete(self, docid: ID_TYPE) -> None:
         """Delete an doc in the datastore.

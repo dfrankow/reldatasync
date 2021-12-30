@@ -111,17 +111,19 @@ class _TestDatastore(unittest.TestCase):
         """put_if_needed doesn't put a second time"""
         doc = Document({_ID: 'A', 'value': 'val1'})
         # put the doc
-        self.assertEqual(1, self.server.put(doc, increment_rev=True))
+        num, doc = self.server.put(doc, increment_rev=True)
+        self.assertEqual(1, num)
         # get doc back out with its _REV set
-        doc = self.server.get('A')
+        self.assertTrue(doc[_REV])
         # doc is already present, so it's not put again
-        self.assertEqual(0, self.server.put(doc))
+        self.assertEqual(0, self.server.put(doc)[0])
 
         # doc is already present, but we said we changed it, so it's put
         doc['value'] = 'val2'
-        self.assertEqual(1, self.server.put(doc, increment_rev=True))
-        doc = self.server.get('A')
-        self.assertEqual('val2', doc['value'])
+        num, new_doc = self.server.put(doc, increment_rev=True)
+        self.assertEqual(1, num)
+        self.assertEqual('val2', new_doc['value'])
+        self.assertEqual(self.server.get('A'), new_doc)
 
     def test_overlapping_sync(self):
         """Overlapping documents from datastore"""
