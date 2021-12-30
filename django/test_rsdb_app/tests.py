@@ -17,8 +17,10 @@ class PatientTest(TestCase):
         residence = 'Yoinkers'
         age = 30
         birth_date = datetime.strptime('2021-01-03', '%Y-%m-%d').date()
+        # test that EmailField (derived from CharField) works
+        email = 'yoinks@example.com'
         self.patient = Patient(name=name, residence=residence, age=age,
-                               birth_date=birth_date)
+                               birth_date=birth_date, email=email)
         self.patient.save()
 
     def test_create_delete(self):
@@ -26,8 +28,9 @@ class PatientTest(TestCase):
         residence = 'Yoinkers'
         age = 30
         birth_date = datetime.strptime('2021-01-03', '%Y-%m-%d').date()
+        email = 'yoinks@example.com'
         pat = Patient(name=name, residence=residence, age=age,
-                      birth_date=birth_date)
+                      birth_date=birth_date, email=email)
         pat.save()
 
         # Regular vars are still set
@@ -36,6 +39,7 @@ class PatientTest(TestCase):
         self.assertEqual(age, pat.age)
         self.assertTrue(pat.created_dt)
         self.assertEqual(birth_date, pat.birth_date)
+        self.assertEqual(email, pat.email)
 
         # Syncable model vars are set
         self.assertEqual(1, pat._seq)
@@ -100,6 +104,7 @@ class PatientTest(TestCase):
             self.assertEqual(pat.age, pat3.age)
             self.assertEqual(pat.created_dt, pat3.created_dt)
             self.assertEqual(pat.birth_date, pat3.birth_date)
+            self.assertEqual(pat.email, pat3.email)
 
     def test_sync(self):
         self._create_patient()
@@ -137,7 +142,8 @@ class PatientTest(TestCase):
                 '"residence": "Yoinkers", '
                 '"age": 30, '
                 '"birth_date": "2021-01-03", '
-                f'"created_dt": "{spat.created_dt.isoformat()}"}}',
+                f'"created_dt": "{spat.created_dt.isoformat()}", '
+                '"email": "yoinks@example.com"}',
                 pat_str)
 
             # The datetime has a format like this, ending in +00:00
@@ -159,7 +165,8 @@ class PatientTest(TestCase):
                 'residence': 'TEXT',
                 'age': 'INTEGER',
                 'birth_date': 'DATE',
-                'created_dt': 'DATETIME'
+                'created_dt': 'DATETIME',
+                'email': 'TEXT',
             }
             pat2 = JsonDecoder(schema=schema).decode(pat_str)
             self.assertEqual(pat, pat2)
