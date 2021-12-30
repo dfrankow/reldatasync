@@ -1,10 +1,10 @@
 import json
 from datetime import datetime
-from unittest import skip
 
 from django.test import TestCase
 from reldatasync import util
 from reldatasync.datastore import MemoryDatastore
+from reldatasync.json import JsonEncoder, JsonDecoder
 from reldatasync.replicator import Replicator
 from reldatasync.vectorclock import VectorClock
 
@@ -118,10 +118,48 @@ class PatientTest(TestCase):
                     'name', 'residence', 'age', 'created_dt', 'birth_date'):
                 self.assertEqual(getattr(pat, field), pat2[field])
 
-    @skip
     def test_json_dumps(self):
         self._create_patient()
 
         with Patient._get_datastore() as ds:
-            pat = ds.get(self.patient._id)
-            self.assertTrue(json.dumps(pat))
+            spat = self.patient
+            pat = ds.get(spat._id)
+
+            # encoding with datetime works
+            pat_str = JsonEncoder().encode(pat)
+            self.maxDiff = 2000
+            self.assertEqual(
+                f'{{"_id": "{spat._id}", '
+                f'"_rev": {json.dumps(spat._rev)}, '
+                '"_seq": 1, '
+                '"_deleted": false, '
+                '"name": "Yoinks", '
+                '"residence": "Yoinkers", '
+                '"age": 30, '
+                '"birth_date": "2021-01-03", '
+                f'"created_dt": "{spat.created_dt.isoformat()}"}}',
+                pat_str)
+
+            # The datetime has a format like this, ending in +00:00
+            # 2021-12-30T17:07:27.918653+00:00
+            self.assertIn('+00:00', pat_str)
+
+            # decoding without schema does not work
+            pat2 = JsonDecoder().decode(pat_str)
+            with self.assertRaises(TypeError):
+                self.assertEqual(pat, pat2)
+
+            # decoding with schema works
+            schema = {
+                '_id': 'TEXT',
+                '_seq': 'INTEGER',
+                '_rev': 'TEXT',
+                '_deleted': 'BOOLEAN',
+                'name': 'TEXT',
+                'residence': 'TEXT',
+                'age': 'INTEGER',
+                'birth_date': 'DATE',
+                'created_dt': 'DATETIME'
+            }
+            pat2 = JsonDecoder(schema=schema).decode(pat_str)
+            self.assertEqual(pat, pat2)
