@@ -1,14 +1,14 @@
 from django.db import models
 from django.utils import timezone
 
-from rsdb_app.models import SyncableModel
+from reldatasync_app.models import SyncableModel
 
 
 class Organization(SyncableModel):
     name = models.CharField(max_length=255)
 
     class DatastoreMeta:
-        datastore_name = 'rsdb_server'
+        datastore_name = 'reldatasync_project_server'
 
 
 class Patient(SyncableModel):
@@ -24,4 +24,4 @@ class Patient(SyncableModel):
         on_delete=models.PROTECT)
 
     class DatastoreMeta:
-        datastore_name = 'rsdb_server'
+        datastore_name = 'reldatasync_project_server'

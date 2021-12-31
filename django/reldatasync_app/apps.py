@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class RsdbAppConfig(AppConfig):
+class ReldatasyncAppConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'rsdb_app'
+    name = 'reldatasync_app'

@@ -8,7 +8,7 @@ from reldatasync.json import JsonEncoder, JsonDecoder
 from reldatasync.replicator import Replicator
 from reldatasync.vectorclock import VectorClock
 
-from test_rsdb_app.models import Patient, Organization
+from test_reldatasync_app.models import Patient, Organization
 
 
 class PatientTest(TestCase):
