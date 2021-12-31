@@ -20,7 +20,7 @@ setuptools.setup(
     version='0.0.1',
     author='Dan Frankowski',
     author_email='dfrankow+rds@gmail.com',
-    description='Synchronize relational data between two entities',
+    description='Synchronize relational data between two datastores',
     install_requires=read_requirements(),
     long_description=long_description,
     long_description_content_type='text/markdown',

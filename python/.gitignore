@@ -1,3 +1,5 @@
+# NOTE: shared in django and python directories
+
 .idea
 .venv
 __pycache__
