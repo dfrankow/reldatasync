@@ -22,8 +22,9 @@ Code structure
 
 Subdirectories:
 
-- python - A python module
-- java/android - Some code suitable for android
+- python - A python package (reldatasync)
+- django - A django package (django-reldatasync)
+- java/android - Code suitable for android
 
 
 Related efforts
