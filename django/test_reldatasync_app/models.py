@@ -8,7 +8,7 @@ class Organization(SyncableModel):
     name = models.CharField(max_length=255)
 
     class DatastoreMeta:
-        datastore_name = 'rsdb_server'
+        datastore_name = 'reldatasync_project_server'
 
 
 class Patient(SyncableModel):
@@ -24,4 +24,4 @@ class Patient(SyncableModel):
         on_delete=models.PROTECT)
 
     class DatastoreMeta:
-        datastore_name = 'rsdb_server'
+        datastore_name = 'reldatasync_project_server'
