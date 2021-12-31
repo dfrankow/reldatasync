@@ -1,0 +1,13 @@
+# NOTE: shared in django and python directories
+
+.idea
+.venv
+__pycache__
+
+tmp/
+build/
+dist/
+*.egg-info/
+
+# Download directory for setuptools
+.eggs/
