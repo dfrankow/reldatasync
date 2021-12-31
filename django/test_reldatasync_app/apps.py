@@ -3,4 +3,4 @@ from django.apps import AppConfig
 
 class TestRsdbAppConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'test_rsdb_app'
+    name = 'test_reldatasync_app'

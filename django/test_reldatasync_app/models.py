@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 
-from rsdb_app.models import SyncableModel
+from reldatasync_app.models import SyncableModel
 
 
 class Organization(SyncableModel):

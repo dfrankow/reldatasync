@@ -40,7 +40,7 @@ class Migration(migrations.Migration):
                 ('birth_date', models.DateField()),
                 ('created_dt', models.DateTimeField(default=django.utils.timezone.now)),
                 ('email', models.EmailField(max_length=254)),
-                ('org', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='test_rsdb_app.organization')),
+                ('org', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='test_reldatasync_app.organization')),
             ],
             options={
                 'abstract': False,

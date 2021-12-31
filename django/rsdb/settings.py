@@ -42,8 +42,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    'rsdb_app',
-    'test_rsdb_app',
+    'reldatasync_app',
+    'test_reldatasync_app',
 ]
 
 MIDDLEWARE = [
