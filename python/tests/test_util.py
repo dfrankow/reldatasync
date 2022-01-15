@@ -13,3 +13,7 @@ class TestUtil(unittest.TestCase):
         ustr = util.uuid4_string()
         self.assertEqual(32, len(ustr))
         self.assertNotIn('-', ustr)
+
+        # calling again produces a different id
+        ustr2 = util.uuid4_string()
+        self.assertNotEqual(ustr, ustr2)
