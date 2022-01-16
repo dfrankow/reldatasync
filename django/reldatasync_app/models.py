@@ -25,26 +25,32 @@ class SyncableModel(models.Model):
     _seq = models.IntegerField()
     _deleted = models.BooleanField()
 
-    @classmethod
-    def _get_datastore(cls, conn=None):
+    @staticmethod
+    def get_datastore_by_name(datastore_name, db_table, conn=None):
         if not conn:
             conn = connections['default']
 
-        ds_name = cls.DatastoreMeta.datastore_name
         # get id for name if it exists
         ds_id = None
         try:
-            row = DataSyncRevisions.objects.get(datastore_name=ds_name)
+            row = DataSyncRevisions.objects.get(datastore_name=datastore_name)
             ds_id = row.datastore_id
         except DataSyncRevisions.DoesNotExist:
             # that's okay
             pass
 
         return PostgresDatastore(
-            ds_name,
+            datastore_name,
             conn,
-            cls._meta.db_table,
+            db_table,
             datastore_id=ds_id)
+
+    @classmethod
+    def _get_datastore(cls, conn=None):
+        return SyncableModel.get_datastore_by_name(
+            cls.DatastoreMeta.datastore_name,
+            cls._meta.db_table,
+            conn)
 
     def assign_rev_and_seq(self):
         """Assign self._rev and self._seq with appropriate values"""
