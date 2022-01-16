@@ -46,11 +46,16 @@ class SyncableModel(models.Model):
             cls._meta.db_table,
             datastore_id=ds_id)
 
-    def save(self, *args, **kwargs):
+    def assign_rev_and_seq(self):
+        """Assign self._rev and self._seq with appropriate values"""
         with self._get_datastore() as pd:
             # Set _REV, _SEQ, _DELETED properly
             self._rev, self._seq = pd.new_rev_and_seq(self._rev)
-            self._deleted = False
+
+    def save(self, *args, **kwargs):
+        # Set _REV, _SEQ, _DELETED properly
+        self.assign_rev_and_seq()
+        self._deleted = False
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
