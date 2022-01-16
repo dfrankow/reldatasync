@@ -49,7 +49,6 @@ class SyncableModel(models.Model):
     def assign_rev_and_seq(self):
         """Assign self._rev and self._seq with appropriate values"""
         with self._get_datastore() as pd:
-            # Set _REV, _SEQ, _DELETED properly
             self._rev, self._seq = pd.new_rev_and_seq(self._rev)
 
     def save(self, *args, **kwargs):
