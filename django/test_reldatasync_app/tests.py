@@ -68,6 +68,10 @@ class PatientTest(TestCase):
         self.assertGreater(
             VectorClock.from_string(pat._rev), VectorClock.from_string(rev))
 
+        # _deleted flag was set in the DB
+        pat2 = Patient.objects.get(name=pat.name)
+        self.assertTrue(pat2._deleted)
+
     def test_get_put(self):
         # In with Django
         self._create_patient()
