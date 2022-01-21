@@ -17,11 +17,13 @@ class DataSyncRevisions(models.Model):
 
 
 class SyncableModel(models.Model):
+    REV_LENGTH = 2000
+
     # fields needed for PostgresDatastore: _id, _rev, _deleted
     _id = models.CharField(
-        unique=True, primary_key=True, max_length=100,
+        unique=True, primary_key=True, max_length=32,
         default=uuid4_string)
-    _rev = models.CharField(max_length=2000)
+    _rev = models.CharField(max_length=REV_LENGTH)
     _seq = models.IntegerField()
     _deleted = models.BooleanField()
 
@@ -58,6 +60,9 @@ class SyncableModel(models.Model):
         """Assign self._rev and self._seq with appropriate values"""
         with self._get_datastore() as pd:
             self._rev, self._seq = pd.new_rev_and_seq(self._rev)
+            if len(self._rev) > SyncableModel.REV_LENGTH:
+                raise ValueError(
+                    f'_rev is limited to {SyncableModel.REV_LENGTH} characters')
 
     def save(self, *args, **kwargs):
         """save() that sets _rev, _seq, and _deleted properly"""

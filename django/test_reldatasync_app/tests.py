@@ -8,6 +8,7 @@ from reldatasync.json import JsonEncoder, JsonDecoder
 from reldatasync.replicator import Replicator
 from reldatasync.vectorclock import VectorClock
 
+from reldatasync_app.models import SyncableModel
 from test_reldatasync_app.models import Patient, Organization
 
 
@@ -117,6 +118,19 @@ class PatientTest(TestCase):
             self.assertEqual(pat.birth_date, pat3.birth_date)
             self.assertEqual(pat.email, pat3.email)
             self.assertEqual(pat.org, pat3.org)
+
+    def test_rev_length(self):
+        # In with Django
+        self._create_patient()
+        pat = self.patient
+        # change _rev with a bunch of different servers to make it long
+        rev = VectorClock.from_string(pat._rev)
+        long_key = 'z' * (SyncableModel.REV_LENGTH + 1)
+        rev.set_clock(long_key, 10)
+        pat._rev = str(rev)
+        self.assertTrue(len(pat._rev) > SyncableModel.REV_LENGTH)
+        with self.assertRaises(ValueError):
+            pat.save()
 
     def test_sync(self):
         self._create_patient()
