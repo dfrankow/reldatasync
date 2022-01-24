@@ -1,2 +1,10 @@
 Django>=3.2,<4.3
 dj-database-url==0.5.0
+djangorestframework>=3,<4
+-e git+https://github.com/dfrankow/reldatasync@v0.0.3#subdirectory=python&egg=reldatasync
+
+# To use postgres
+psycopg2-binary
+
+# For development
+django-debug-toolbar
