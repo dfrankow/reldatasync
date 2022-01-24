@@ -4,58 +4,14 @@ import argparse
 import logging
 
 import requests
-from typing import Sequence, Tuple
 
 from reldatasync import util
-from reldatasync.datastore import Datastore, MemoryDatastore
-from reldatasync.document import Document, ID_TYPE, _ID
+from reldatasync.datastore import (
+    MemoryDatastore, RestClientSourceDatastore)
+from reldatasync.document import Document, _ID
 from reldatasync.replicator import Replicator
 
 logger = logging.getLogger(__name__)
-
-
-class RestClientSourceDatastore(Datastore):
-    """Communicate to a REST server."""
-    def __init__(self, baseurl: str, table: str):
-        super().__init__(table)
-        self.table = table
-        self.baseurl = baseurl
-
-    def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
-        resp = requests.get(
-            self._server_url(self.table + '/doc/' + docid),
-            params={'include_deleted': include_deleted})
-        ret = None
-        if resp.status_code == 200:
-            ret = resp.json()
-        return ret
-
-    def put(self, doc: Document, increment_rev=False) -> Tuple[int, Document]:
-        logger.debug(f'RCSD {self.table}: put doc {doc}'
-                     f' increment_rev {increment_rev}')
-        resp = requests.post(
-            self._server_url(self.table + '/doc'),
-            params={'increment_rev': increment_rev},
-            json=doc)
-        assert resp.status_code == 200, resp.status_code
-        json = resp.json()
-        return json['num_docs_put'], json['document']
-
-    def get_docs_since(self, the_seq: int, num: int) -> Tuple[
-            int, Sequence[Document]]:
-        resp = requests.get(
-            self._server_url(self.table + '/docs'),
-            params={'start_sequence_id': the_seq, 'chunk_size': num})
-        ret = None
-        # TODO: What about 500?
-        if resp.status_code == 200:
-            js = resp.json()
-            ret = (js['current_sequence_id'],
-                   [Document(doc) for doc in js['documents']])
-        return ret
-
-    def _server_url(self, url: str) -> str:
-        return self.baseurl + url
 
 
 def main():
