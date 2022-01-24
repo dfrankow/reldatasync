@@ -463,14 +463,14 @@ class PostgresDatastore(Datastore):
 
 class RestClientSourceDatastore(Datastore):
     """Communicate to a REST server for a datastore."""
-    def __init__(self, baseurl: str, table: str):
-        super().__init__(table)
-        self.table = table
+    def __init__(self, baseurl: str, datastore: str):
+        super().__init__(datastore)
+        self.datastore = datastore
         self.baseurl = baseurl
 
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         resp = requests.get(
-            self._server_url(self.table + '/doc/' + docid),
+            self._server_url(self.datastore + '/doc/' + docid),
             params={'include_deleted': include_deleted})
         ret = None
         if resp.status_code == 200:
@@ -478,10 +478,10 @@ class RestClientSourceDatastore(Datastore):
         return ret
 
     def put(self, doc: Document, increment_rev=False) -> Tuple[int, Document]:
-        logger.debug(f'RCSD {self.table}: put doc {doc}'
+        logger.debug(f'RCSD {self.datastore}: put doc {doc}'
                      f' increment_rev {increment_rev}')
         resp = requests.post(
-            self._server_url(self.table + '/doc'),
+            self._server_url(self.datastore + '/doc'),
             params={'increment_rev': increment_rev},
             json=doc)
         assert resp.status_code == 200, resp.status_code
@@ -491,7 +491,7 @@ class RestClientSourceDatastore(Datastore):
     def get_docs_since(self, the_seq: int, num: int) -> Tuple[
             int, Sequence[Document]]:
         resp = requests.get(
-            self._server_url(self.table + '/docs'),
+            self._server_url(self.datastore + '/docs'),
             params={'start_sequence_id': the_seq, 'chunk_size': num})
         ret = None
         # TODO: What about 500?
