@@ -53,8 +53,10 @@ jobs:
         # For debugging, uncomment LOG_LEVEL=DEBUG:
         # LOG_LEVEL=DEBUG python setup.py test
         python setup.py test
-        # Install library for Django:
-        python setup.py install
+        # Install local python library for Django
+        # to allow testing of local changes
+        # NOTE: this would work if it were after Django's pip install below
+        # python setup.py install
       env:
         POSTGRES_USER: postgres
         POSTGRES_PASSWORD: postgres
@@ -68,7 +70,7 @@ jobs:
       env:
         # Variables for unit tests
         # must match postgres service above
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/default
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/github-actions
         SECRET_KEY: this-has-to-be-at-least-51-characters-and-6-unique-ones
     - name: Run java tests
       run: |
