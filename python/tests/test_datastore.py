@@ -1,6 +1,8 @@
 import logging
 import os
 import random
+# import sqlite3
+from abc import abstractmethod
 
 import psycopg2
 import unittest
@@ -437,21 +439,12 @@ class TestMemoryDatastore(_TestDatastore):
         self.third = MemoryDatastore('third', 'third_id')
 
 
-class _PostgresTestDatabase:
+class _TestDatabase:
     def __init__(self, dbname):
         self.dbname = dbname
 
         self._conn = None
         self.datastore = None
-
-    def connect(self, table, datastore_id=None):
-        if datastore_id is None:
-            datastore_id = self.dbname + '_id'
-        self._conn = psycopg2.connect(self._dbconnstr(self.dbname))
-        self.datastore = PostgresDatastore(
-            self.dbname, self._conn, table,
-            datastore_id=datastore_id)
-        self.datastore.__enter__()
 
     def close(self):
         if self.datastore:
@@ -462,59 +455,13 @@ class _PostgresTestDatabase:
             self._conn.close()
             self._conn = None
 
-    @staticmethod
-    def _dbconnstr(dbname=None):
-        """Connect to test database on host db, user postgres by default.
-
-        You can change host and server with environment variables POSTGRES_HOST
-        and POSTGRES_SERVER.
-        """
-        host = os.getenv('POSTGRES_HOST', 'localhost')
-        user = os.getenv('POSTGRES_USER', 'postgres')
-        password = os.getenv('POSTGRES_PASSWORD', None)
-        the_str = f'host={host} user={user}'
-        if dbname:
-            the_str += f' dbname={dbname}'
-        if password:
-            the_str += f' password={password}'
-        return the_str
-
-    def exec_sql(self, exec_func, dbname=None, autocommit=True):
-        """Execute some SQL.
-
-        Sometimes we want it with dbname, sometimes without (e.g., when
-           creating the database).
-        Otherwise we'd just keep a cursor around instead.
-        """
-        connstr = self._dbconnstr(dbname)
-        conn = None
-        # NOTE: This particular style of executing a command is to allow
-        # creating a database with later versions of psycopg2.
-        # See https://stackoverflow.com/a/68112827
-        try:
-            conn = psycopg2.connect(connstr)
-            logger.debug(f'Connect 1 {connstr}')
-            if autocommit:
-                conn.set_isolation_level(
-                    psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-            with conn.cursor() as cursor:
-                exec_func(cursor)
-        finally:
-            if conn:
-                conn.close()
-                logger.debug(f'Closed conn 1 {connstr}')
-
     def create_test_db(self):
         self._create_test_db1()
         self._create_test_tables()
 
     def _create_test_db1(self):
         def exec_func(curs):
-            logger.warning(f"CREATE DATABASE '{self.dbname}'")
-            curs.execute(
-                'SELECT datname FROM pg_catalog.pg_database WHERE datname = %s',
-                (self.dbname,))
-            if not curs.fetchone():
+            if not self.database_exists(self.dbname):
                 curs.execute('CREATE DATABASE %s' % self.dbname)
             else:
                 logger.info('database %s already exists' % self.dbname)
@@ -526,7 +473,7 @@ class _PostgresTestDatabase:
             curs.execute(
                 'select * from information_schema.tables where table_name=%s',
                 (tablename,))
-            if not bool(curs.fetchone()):
+            if not self.table_exists(tablename):
                 # table doesn't exist, create it
                 curs.execute('CREATE TABLE %s (%s)' % (tablename, definition))
         self.exec_sql(exec_func, dbname=self.dbname)
@@ -567,6 +514,128 @@ class _PostgresTestDatabase:
     def drop_db(self):
         self.exec_sql(
             lambda curs: curs.execute('DROP DATABASE %s' % self.dbname))
+
+    @abstractmethod
+    def table_exists(self, table):
+        pass
+
+    @abstractmethod
+    def database_exists(self, database_name):
+        pass
+
+    @abstractmethod
+    def exec_sql(self, exec_func, dbname=None, autocommit=True):
+        pass
+
+
+# class _SqliteTestDatabase(_TestDatabase):
+#     def __init__(self, dbname):
+#         super().__init__(dbname)
+#
+#     def connect(self, table, datastore_id=None):
+#         if datastore_id is None:
+#             datastore_id = self.dbname + '_id'
+#         self._conn = sqlite3.connect(self.dbname)
+#         # TODO: make SqliteDatastore
+#         self.datastore = PostgresDatastore(
+#             self.dbname, self._conn, table,
+#             datastore_id=datastore_id)
+#         self.datastore.__enter__()
+#
+#     def exec_sql(self, exec_func, dbname=None, autocommit=True):
+#         """Execute some SQL.
+#
+#         Sometimes we want it with dbname, sometimes without (e.g., when
+#            creating the database).
+#         Otherwise we'd just keep a cursor around instead.
+#         """
+#         conn = None
+#         cursor = None
+#         try:
+#             conn = sqlite3.connect(self.dbname)
+#             logger.debug(f'Connect 1 {self.dbname}')
+#             cursor = conn.cursor()
+#             exec_func(cursor)
+#         finally:
+#             if cursor:
+#                 cursor.close()
+#             if conn:
+#                 conn.close()
+#                 logger.debug(f'Closed conn 1 {self.dbname}')
+
+
+class _PostgresTestDatabase(_TestDatabase):
+    def connect(self, table, datastore_id=None):
+        if datastore_id is None:
+            datastore_id = self.dbname + '_id'
+        self._conn = psycopg2.connect(self._dbconnstr(self.dbname))
+        self.datastore = PostgresDatastore(
+            self.dbname, self._conn, table,
+            datastore_id=datastore_id)
+        self.datastore.__enter__()
+
+    @staticmethod
+    def _dbconnstr(dbname=None):
+        """Connect to test database on host db, user postgres by default.
+
+        You can change host and server with environment variables POSTGRES_HOST
+        and POSTGRES_SERVER.
+        """
+        host = os.getenv('POSTGRES_HOST', 'localhost')
+        user = os.getenv('POSTGRES_USER', 'postgres')
+        password = os.getenv('POSTGRES_PASSWORD', None)
+        the_str = f'host={host} user={user}'
+        if dbname:
+            the_str += f' dbname={dbname}'
+        if password:
+            the_str += f' password={password}'
+        return the_str
+
+    def exec_sql(self, exec_func, dbname=None, autocommit=True):
+        """Execute some SQL.
+
+        Sometimes we want it with dbname, sometimes without (e.g., when
+           creating the database).
+        Otherwise we'd just keep a cursor around instead.
+        """
+        connstr = self._dbconnstr(dbname)
+        conn = None
+        # NOTE: This particular style of executing a command is to allow
+        # creating a database with later versions of psycopg2.
+        # See https://stackoverflow.com/a/68112827
+        ret = None
+        try:
+            conn = psycopg2.connect(connstr)
+            logger.debug(f'Connect 1 {connstr}')
+            if autocommit:
+                conn.set_isolation_level(
+                    psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+            with conn.cursor() as cursor:
+                ret = exec_func(cursor)
+        finally:
+            if conn:
+                conn.close()
+                logger.debug(f'Closed conn 1 {connstr}')
+        return ret
+
+    def database_exists(self, database_name):
+        def exec_func(curs):
+            curs.execute(
+                'SELECT datname FROM pg_catalog.pg_database WHERE datname = %s',
+                (database_name,))
+
+            return bool(curs.fetchone())
+        return self.exec_sql(exec_func, dbname=None, autocommit=True)
+
+    def table_exists(self, tablename):
+        def exec_func(curs):
+            # check for table existence
+            curs.execute(
+                'select * from information_schema.tables where table_name=%s',
+                (tablename,))
+            return bool(curs.fetchone())
+
+        return self.exec_sql(exec_func, dbname=self.dbname, autocommit=True)
 
 
 class _TestDatabases:
@@ -665,6 +734,7 @@ class TestPostgresDatastore(_TestDatastore):
         super(TestPostgresDatastore, cls).setUpClass()
         assert cls._testdb is None
         cls._testdb = _TestDatabases(_PostgresTestDatabase)
+        # cls._testdb = _TestDatabases(_SqliteTestDatabase)
         cls._testdb.init_dbclass()
         cls._testdb._create_databases()
         cls._testdb.connect()
