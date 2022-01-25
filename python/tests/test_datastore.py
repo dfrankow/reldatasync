@@ -569,7 +569,7 @@ class _PostgresTestDatabase:
             lambda curs: curs.execute('DROP DATABASE %s' % self.dbname))
 
 
-class _TestDatabases():
+class _TestDatabases:
     def __init__(self, testdbclass):
         self.server_dbname = 'server'
         self.client_dbname = 'client'
