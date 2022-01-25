@@ -1,7 +1,6 @@
 import logging
 import os
 import random
-# import sqlite3
 from abc import abstractmethod
 
 import psycopg2
@@ -526,42 +525,6 @@ class _TestDatabase:
     @abstractmethod
     def exec_sql(self, exec_func, dbname=None, autocommit=True):
         pass
-
-
-# class _SqliteTestDatabase(_TestDatabase):
-#     def __init__(self, dbname):
-#         super().__init__(dbname)
-#
-#     def connect(self, table, datastore_id=None):
-#         if datastore_id is None:
-#             datastore_id = self.dbname + '_id'
-#         self._conn = sqlite3.connect(self.dbname)
-#         # TODO: make SqliteDatastore
-#         self.datastore = PostgresDatastore(
-#             self.dbname, self._conn, table,
-#             datastore_id=datastore_id)
-#         self.datastore.__enter__()
-#
-#     def exec_sql(self, exec_func, dbname=None, autocommit=True):
-#         """Execute some SQL.
-#
-#         Sometimes we want it with dbname, sometimes without (e.g., when
-#            creating the database).
-#         Otherwise we'd just keep a cursor around instead.
-#         """
-#         conn = None
-#         cursor = None
-#         try:
-#             conn = sqlite3.connect(self.dbname)
-#             logger.debug(f'Connect 1 {self.dbname}')
-#             cursor = conn.cursor()
-#             exec_func(cursor)
-#         finally:
-#             if cursor:
-#                 cursor.close()
-#             if conn:
-#                 conn.close()
-#                 logger.debug(f'Closed conn 1 {self.dbname}')
 
 
 class _PostgresTestDatabase(_TestDatabase):
