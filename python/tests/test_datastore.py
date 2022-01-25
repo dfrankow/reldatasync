@@ -482,7 +482,8 @@ class _PostgresTestDatabase:
     def exec_sql(self, exec_func, dbname=None, autocommit=True):
         """Execute some SQL.
 
-        Sometimes we want it with dbname, sometimes without.
+        Sometimes we want it with dbname, sometimes without (e.g., when
+           creating the database).
         Otherwise we'd just keep a cursor around instead.
         """
         connstr = self._dbconnstr(dbname)
@@ -504,22 +505,22 @@ class _PostgresTestDatabase:
                 logger.debug(f'Closed conn 1 {connstr}')
 
     def create_test_db(self):
-        self._create_test_db1(self.dbname)
-        self._create_test_tables(self.dbname)
+        self._create_test_db1()
+        self._create_test_tables()
 
-    def _create_test_db1(self, dbname):
+    def _create_test_db1(self):
         def exec_func(curs):
+            logger.warning(f"CREATE DATABASE '{self.dbname}'")
             curs.execute(
                 'SELECT datname FROM pg_catalog.pg_database WHERE datname = %s',
-                (dbname,))
+                (self.dbname,))
             if not curs.fetchone():
-                curs.execute('CREATE DATABASE %s' % dbname)
+                curs.execute('CREATE DATABASE %s' % self.dbname)
             else:
-                logger.info('database %s already exists' % dbname)
-        self.exec_sql(exec_func, autocommit=True)
+                logger.info('database %s already exists' % self.dbname)
+        self.exec_sql(exec_func, dbname=None, autocommit=True)
 
-    def _create_table_if_not_exists(self, dbname: str, tablename: str,
-                                    definition: str):
+    def _create_table_if_not_exists(self, tablename: str, definition: str):
         def exec_func(curs):
             # check for table existence
             curs.execute(
@@ -528,12 +529,11 @@ class _PostgresTestDatabase:
             if not bool(curs.fetchone()):
                 # table doesn't exist, create it
                 curs.execute('CREATE TABLE %s (%s)' % (tablename, definition))
-        self.exec_sql(exec_func, dbname=dbname)
+        self.exec_sql(exec_func, dbname=self.dbname)
 
-    def _create_test_tables(self, dbname):
+    def _create_test_tables(self):
         def exec_func(curs):
             self._create_table_if_not_exists(
-                dbname,
                 'data_sync_revisions',
                 'datastore_id varchar(100) not null,'
                 'datastore_name varchar(1000) not null,'
@@ -547,11 +547,11 @@ class _PostgresTestDatabase:
                 _deleted bool,
                 value text
             """
-            self._create_table_if_not_exists(dbname, 'docs1', docs_def)
-            self._create_table_if_not_exists(dbname, 'docs2', docs_def)
-        self.exec_sql(exec_func, dbname=dbname)
+            self._create_table_if_not_exists('docs1', docs_def)
+            self._create_table_if_not_exists('docs2', docs_def)
+        self.exec_sql(exec_func, dbname=self.dbname)
 
-    def _clear_tables(self, dbname):
+    def _clear_tables(self):
         # logger.debug(f"_clear_tables {dbname}")
         def exec_func(curs):
             curs.execute('DELETE FROM data_sync_revisions')
@@ -562,7 +562,7 @@ class _PostgresTestDatabase:
             result = curs.fetchone()
             assert result is None
 
-        self.exec_sql(exec_func, dbname=dbname)
+        self.exec_sql(exec_func, dbname=self.dbname)
 
     def drop_db(self):
         self.exec_sql(
