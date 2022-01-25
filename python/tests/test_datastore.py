@@ -437,60 +437,30 @@ class TestMemoryDatastore(_TestDatastore):
         self.third = MemoryDatastore('third', 'third_id')
 
 
-class _TestDatabases:
-    def __init__(self):
-        self.server_dbname = 'test_server'
-        self.client_dbname = 'test_client'
-        self.third_dbname = 'test_third'
+class _PostgresTestDatabase:
+    def __init__(self, dbname):
+        self.dbname = dbname
 
-        # SAME_DB: if True, put server/client tables in one DB;
-        # else put one table in two DBs.
-        self.same_db = True
+        self._conn = None
+        self.datastore = None
 
-        if self.same_db:
-            self.client_dbname = self.server_dbname
-        else:
-            self.client_dbname = 'test_client'
+    def connect(self, table, datastore_id=None):
+        if datastore_id is None:
+            datastore_id = self.dbname + '_id'
+        self._conn = psycopg2.connect(self._dbconnstr(self.dbname))
+        self.datastore = PostgresDatastore(
+            self.dbname, self._conn, table,
+            datastore_id=datastore_id)
+        self.datastore.__enter__()
 
+    def close(self):
+        if self.datastore:
+            self.datastore.__exit__()
+            self.datastore = None
 
-class _PostgresTestDatabases(_TestDatabases):
-    def __init__(self):
-        super().__init__()
-
-        self.server_connstr = self._dbconnstr(self.server_dbname)
-        self.third_connstr = self._dbconnstr(self.third_dbname)
-
-        if self.same_db:
-            self.client_connstr = self.server_connstr
-        else:
-            self.client_connstr = self._dbconnstr(self.client_dbname)
-
-        self.server_conn = None
-        self.client_conn = None
-        self.third_conn = None
-
-        self.client = None
-        self.server = None
-        self.third = None
-
-    def connect(self):
-        self.server_conn = psycopg2.connect(self.server_connstr)
-        self.client_conn = psycopg2.connect(self.client_connstr)
-        self.third_conn = psycopg2.connect(self.third_connstr)
-
-        logger.debug('Set up server, client, third')
-        self.server = PostgresDatastore(
-            'server', self.server_conn, 'docs1',
-            datastore_id='server_id')
-        self.server.__enter__()
-        self.client = PostgresDatastore(
-            'client', self.client_conn, 'docs2',
-            datastore_id='client_id')
-        self.client.__enter__()
-        self.third = PostgresDatastore(
-            'third', self.third_conn, 'docs1',
-            datastore_id='third_id')
-        self.third.__enter__()
+        if self._conn:
+            self._conn.close()
+            self._conn = None
 
     @staticmethod
     def _dbconnstr(dbname=None):
@@ -533,9 +503,9 @@ class _PostgresTestDatabases(_TestDatabases):
                 conn.close()
                 logger.debug(f'Closed conn 1 {connstr}')
 
-    def _create_test_db(self, dbname):
-        self._create_test_db1(dbname)
-        self._create_test_tables(dbname)
+    def create_test_db(self):
+        self._create_test_db1(self.dbname)
+        self._create_test_tables(self.dbname)
 
     def _create_test_db1(self, dbname):
         def exec_func(curs):
@@ -594,32 +564,71 @@ class _PostgresTestDatabases(_TestDatabases):
 
         self.exec_sql(exec_func, dbname=dbname)
 
-    def _drop_db(self, dbname):
-        self.exec_sql(lambda curs: curs.execute('DROP DATABASE %s' % dbname))
+    def drop_db(self):
+        self.exec_sql(
+            lambda curs: curs.execute('DROP DATABASE %s' % self.dbname))
 
-    def _create_databases(self):
-        # create server and client databases
-        self._create_test_db(self.server_dbname)
+
+class _TestDatabases():
+    def __init__(self, testdbclass):
+        self.server_dbname = 'server'
+        self.client_dbname = 'client'
+        self.third_dbname = 'third'
+
+        # SAME_DB: if True, put server/client tables in one DB;
+        # else put one table in two DBs.
+        self.same_db = True
 
         if self.same_db:
             self.client_dbname = self.server_dbname
-            self.client_connstr = self.server_connstr
         else:
             self.client_dbname = 'test_client'
-            self.client_connstr = self._dbconnstr(self.client_dbname)
-            self._create_test_db(self.client_dbname)
 
-        self.third_dbname = 'test_third'
-        self.third_connstr = self._dbconnstr(self.third_dbname)
-        self._create_test_db(self.third_dbname)
+        self.testdbclass = testdbclass
 
-        self.connect()
+        self.serverdb = None
+        self.clientdb = None
+        self.thirddb = None
+
+        # Datastores
+        self.client = None
+        self.server = None
+        self.third = None
+
+    def init_dbclass(self):
+        logger.debug('Set up server, client, third')
+        self.serverdb = self.testdbclass(self.server_dbname)
+        self.clientdb = self.testdbclass(self.client_dbname)
+        self.thirddb = self.testdbclass(self.third_dbname)
+
+    def connect(self):
+        self.serverdb.connect('docs1')
+        self.clientdb.connect(
+            'docs2',
+            # Even if client is connected to serverdb,
+            # it's a different datastore
+            datastore_id='client_id')
+        self.thirddb.connect('docs1')
+
+        self.server = self.serverdb.datastore
+        self.client = self.clientdb.datastore
+        self.third = self.thirddb.datastore
+
+    def _create_databases(self):
+        # create server and client databases
+        self.serverdb.create_test_db()
+        self.thirddb.create_test_db()
+
+        if not self.same_db:
+            self.clientdb.create_test_db()
+
+        # self.connect()
 
     def _drop_databases(self):
-        self._drop_db(self.server_dbname)
+        self.serverdb.drop_db()
         if not self.same_db:
-            self._drop_db(self.client_dbname)
-        self._drop_db(self.third_dbname)
+            self.clientdb.drop_db()
+        self.thirddb.drop_db()
 
     def reconnect_dbs(self):
         self.close_connections()
@@ -629,21 +638,23 @@ class _PostgresTestDatabases(_TestDatabases):
         """Close connections"""
         logger.debug('Exit server, client, third')
         if self.server:
-            self.server.__exit__()
+            # This __exit__ will be called by the close() below?
+            # self.server.__exit__()
             self.server = None
         if self.client:
-            self.client.__exit__()
+            # self.client.__exit__()
             self.client = None
         if self.third:
-            self.third.__exit__()
+            # self.third.__exit__()
             self.third = None
 
-        for conn_name in ['server_conn', 'client_conn', 'third_conn']:
-            conn = getattr(self, conn_name)
-            if conn:
-                logger.debug(f'Close conn 2 {conn_name}')
-                conn.close()
-                setattr(self, conn_name, None)
+        logger.debug('Set serverdb, clientdb, thirddb to None')
+        for db_name in ['serverdb', 'clientdb', 'thirddb']:
+            db = getattr(self, db_name)
+            if db:
+                db.close()
+                # Don't set to None as we can still use dbname
+                # setattr(self, db_name, None)
 
 
 class TestPostgresDatastore(_TestDatastore):
@@ -653,7 +664,8 @@ class TestPostgresDatastore(_TestDatastore):
     def setUpClass(cls):
         super(TestPostgresDatastore, cls).setUpClass()
         assert cls._testdb is None
-        cls._testdb = _PostgresTestDatabases()
+        cls._testdb = _TestDatabases(_PostgresTestDatabase)
+        cls._testdb.init_dbclass()
         cls._testdb._create_databases()
         cls._testdb.connect()
 
