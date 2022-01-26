@@ -318,7 +318,7 @@ class MemoryDatastore(Datastore):
         return self.sequence_id, docs
 
 
-class DatabaseDatastore(Datastore):
+class DatabaseDatastore(Datastore, ABC):
     """Base datastore for a relational database."""
     def __init__(self, datastore_name: str, conn, tablename: str,
                  datastore_id: str = None):
