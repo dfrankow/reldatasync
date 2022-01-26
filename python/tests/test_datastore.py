@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+from abc import abstractmethod
 
 import psycopg2
 import unittest
@@ -437,222 +438,290 @@ class TestMemoryDatastore(_TestDatastore):
         self.third = MemoryDatastore('third', 'third_id')
 
 
-def _dbconnstr(dbname=None):
-    """Connect to test database on host db, user postgres by default.
+class _TestDatabase:
+    def __init__(self, dbname):
+        self.dbname = dbname
 
-    You can change host and server with environment variables POSTGRES_HOST
-    and POSTGRES_SERVER.
-    """
-    host = os.getenv('POSTGRES_HOST', 'localhost')
-    user = os.getenv('POSTGRES_USER', 'postgres')
-    password = os.getenv('POSTGRES_PASSWORD', None)
-    the_str = f'host={host} user={user}'
-    if dbname:
-        the_str += f' dbname={dbname}'
-    if password:
-        the_str += f' password={password}'
-    return the_str
+        self._conn = None
+        self.datastore = None
+
+    def close(self):
+        if self.datastore:
+            self.datastore.__exit__()
+            self.datastore = None
+
+        if self._conn:
+            self._conn.close()
+            self._conn = None
+
+    def create_test_db(self):
+        self._create_test_db1()
+        self._create_test_tables()
+
+    def _create_test_db1(self):
+        def exec_func(curs):
+            if not self.database_exists(self.dbname):
+                curs.execute('CREATE DATABASE %s' % self.dbname)
+            else:
+                logger.info('database %s already exists' % self.dbname)
+        self.exec_sql(exec_func, dbname=None, autocommit=True)
+
+    def _create_table_if_not_exists(self, tablename: str, definition: str):
+        def exec_func(curs):
+            # check for table existence
+            curs.execute(
+                'select * from information_schema.tables where table_name=%s',
+                (tablename,))
+            if not self.table_exists(tablename):
+                # table doesn't exist, create it
+                curs.execute('CREATE TABLE %s (%s)' % (tablename, definition))
+        self.exec_sql(exec_func, dbname=self.dbname)
+
+    def _create_test_tables(self):
+        def exec_func(curs):
+            self._create_table_if_not_exists(
+                'data_sync_revisions',
+                'datastore_id varchar(100) not null,'
+                'datastore_name varchar(1000) not null,'
+                ' sequence_id int not null')
+            # docs1 only needed on server, and docs2 on client
+            # but it's easier to just create both tables on both
+            docs_def = """
+                _id text UNIQUE not null,
+                _rev varchar(255) not null,
+                _seq int not null,
+                _deleted bool,
+                value text
+            """
+            self._create_table_if_not_exists('docs1', docs_def)
+            self._create_table_if_not_exists('docs2', docs_def)
+        self.exec_sql(exec_func, dbname=self.dbname)
+
+    def _clear_tables(self):
+        # logger.debug(f"_clear_tables {dbname}")
+        def exec_func(curs):
+            curs.execute('DELETE FROM data_sync_revisions')
+            curs.execute('DELETE FROM docs1')
+            curs.execute('DELETE FROM docs2')
+
+            curs.execute('SELECT sequence_id FROM data_sync_revisions')
+            result = curs.fetchone()
+            assert result is None
+
+        self.exec_sql(exec_func, dbname=self.dbname)
+
+    def drop_db(self):
+        self.exec_sql(
+            lambda curs: curs.execute('DROP DATABASE %s' % self.dbname))
+
+    @abstractmethod
+    def table_exists(self, table):
+        pass
+
+    @abstractmethod
+    def database_exists(self, database_name):
+        pass
+
+    @abstractmethod
+    def exec_sql(self, exec_func, dbname=None, autocommit=True):
+        pass
 
 
-def exec_sql(exec_func, dbname=None, autocommit=True):
-    """Execute some SQL.
+class _PostgresTestDatabase(_TestDatabase):
+    def connect(self, table, datastore_id=None):
+        if datastore_id is None:
+            datastore_id = self.dbname + '_id'
+        self._conn = psycopg2.connect(self._dbconnstr(self.dbname))
+        self.datastore = PostgresDatastore(
+            self.dbname, self._conn, table,
+            datastore_id=datastore_id)
+        self.datastore.__enter__()
 
-    Sometimes we want it with dbname, sometimes without.
-    Otherwise we'd just keep a cursor around instead.
-    """
-    connstr = _dbconnstr(dbname)
-    conn = None
-    # NOTE: This particular style of executing a command is to allow
-    # creating a database with later versions of psycopg2.
-    # See https://stackoverflow.com/a/68112827
-    try:
-        conn = psycopg2.connect(connstr)
-        logger.debug(f'Connect 1 {connstr}')
-        if autocommit:
-            conn.set_isolation_level(
-                psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-        with conn.cursor() as cursor:
-            exec_func(cursor)
-    finally:
-        if conn:
-            conn.close()
-            logger.debug(f'Closed conn 1 {connstr}')
+    @staticmethod
+    def _dbconnstr(dbname=None):
+        """Connect to test database on host db, user postgres by default.
 
-
-def _create_test_db(dbname):
-    _create_test_db1(dbname)
-    _create_test_tables(dbname)
-
-
-def _create_test_db1(dbname):
-    def exec_func(curs):
-        curs.execute(
-            'SELECT datname FROM pg_catalog.pg_database WHERE datname = %s',
-            (dbname,))
-        if not curs.fetchone():
-            curs.execute('CREATE DATABASE %s' % dbname)
-        else:
-            logger.info('database %s already exists' % dbname)
-    exec_sql(exec_func, autocommit=True)
-
-
-def _create_table_if_not_exists(dbname: str, tablename: str,
-                                definition: str):
-    def exec_func(curs):
-        # check for table existence
-        curs.execute(
-            'select * from information_schema.tables where table_name=%s',
-            (tablename,))
-        if not bool(curs.fetchone()):
-            # table doesn't exist, create it
-            curs.execute('CREATE TABLE %s (%s)' % (tablename, definition))
-    exec_sql(exec_func, dbname=dbname)
-
-
-def _create_test_tables(dbname):
-    def exec_func(curs):
-        _create_table_if_not_exists(
-            dbname,
-            'data_sync_revisions',
-            'datastore_id varchar(100) not null,'
-            'datastore_name varchar(1000) not null,'
-            ' sequence_id int not null')
-        # docs1 only needed on server, and docs2 on client
-        # but it's easier to just create both tables on both
-        docs_def = """
-            _id text UNIQUE not null,
-            _rev varchar(255) not null,
-            _seq int not null,
-            _deleted bool,
-            value text
+        You can change host and server with environment variables POSTGRES_HOST
+        and POSTGRES_SERVER.
         """
-        _create_table_if_not_exists(dbname, 'docs1', docs_def)
-        _create_table_if_not_exists(dbname, 'docs2', docs_def)
-    exec_sql(exec_func, dbname=dbname)
+        host = os.getenv('POSTGRES_HOST', 'localhost')
+        user = os.getenv('POSTGRES_USER', 'postgres')
+        password = os.getenv('POSTGRES_PASSWORD', None)
+        the_str = f'host={host} user={user}'
+        if dbname:
+            the_str += f' dbname={dbname}'
+        if password:
+            the_str += f' password={password}'
+        return the_str
+
+    def exec_sql(self, exec_func, dbname=None, autocommit=True):
+        """Execute some SQL.
+
+        Sometimes we want it with dbname, sometimes without (e.g., when
+           creating the database).
+        Otherwise we'd just keep a cursor around instead.
+        """
+        connstr = self._dbconnstr(dbname)
+        conn = None
+        # NOTE: This particular style of executing a command is to allow
+        # creating a database with later versions of psycopg2.
+        # See https://stackoverflow.com/a/68112827
+        ret = None
+        try:
+            conn = psycopg2.connect(connstr)
+            logger.debug(f'Connect 1 {connstr}')
+            if autocommit:
+                conn.set_isolation_level(
+                    psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+            with conn.cursor() as cursor:
+                ret = exec_func(cursor)
+        finally:
+            if conn:
+                conn.close()
+                logger.debug(f'Closed conn 1 {connstr}')
+        return ret
+
+    def database_exists(self, database_name):
+        def exec_func(curs):
+            curs.execute(
+                'SELECT datname FROM pg_catalog.pg_database WHERE datname = %s',
+                (database_name,))
+
+            return bool(curs.fetchone())
+        return self.exec_sql(exec_func, dbname=None, autocommit=True)
+
+    def table_exists(self, tablename):
+        def exec_func(curs):
+            # check for table existence
+            curs.execute(
+                'select * from information_schema.tables where table_name=%s',
+                (tablename,))
+            return bool(curs.fetchone())
+
+        return self.exec_sql(exec_func, dbname=self.dbname, autocommit=True)
 
 
-def _clear_tables(dbname):
-    # logger.debug(f"_clear_tables {dbname}")
+class _TestDatabases:
+    def __init__(self, testdbclass):
+        self.server_dbname = 'server'
+        self.client_dbname = 'client'
+        self.third_dbname = 'third'
 
-    def exec_func(curs):
-        curs.execute('DELETE FROM data_sync_revisions')
-        curs.execute('DELETE FROM docs1')
-        curs.execute('DELETE FROM docs2')
+        # SAME_DB: if True, put server/client tables in one DB;
+        # else put one table in two DBs.
+        self.same_db = True
 
-        curs.execute('SELECT sequence_id FROM data_sync_revisions')
-        result = curs.fetchone()
-        assert result is None
+        if self.same_db:
+            self.client_dbname = self.server_dbname
+        else:
+            self.client_dbname = 'test_client'
 
-    exec_sql(exec_func, dbname=dbname)
+        self.testdbclass = testdbclass
 
+        self.serverdb = None
+        self.clientdb = None
+        self.thirddb = None
 
-def _drop_db(dbname):
-    exec_sql(lambda curs: curs.execute('DROP DATABASE %s' % dbname))
+        # Datastores
+        self.client = None
+        self.server = None
+        self.third = None
 
+    def init_dbclass(self):
+        logger.debug('Set up server, client, third')
+        self.serverdb = self.testdbclass(self.server_dbname)
+        self.clientdb = self.testdbclass(self.client_dbname)
+        self.thirddb = self.testdbclass(self.third_dbname)
 
-def _create_databases(cls, same_db):
-    # create server and client databases
-    cls.server_dbname = 'test_server'
-    cls.server_connstr = _dbconnstr(cls.server_dbname)
-    _create_test_db(cls.server_dbname)
+    def connect(self):
+        self.serverdb.connect('docs1')
+        self.clientdb.connect(
+            'docs2',
+            # Even if client is connected to serverdb,
+            # it's a different datastore
+            datastore_id='client_id')
+        self.thirddb.connect('docs1')
 
-    if same_db:
-        cls.client_dbname = cls.server_dbname
-        cls.client_connstr = cls.server_connstr
-    else:
-        cls.client_dbname = 'test_client'
-        cls.client_connstr = _dbconnstr(cls.client_dbname)
-        _create_test_db(cls.client_dbname)
+        self.server = self.serverdb.datastore
+        self.client = self.clientdb.datastore
+        self.third = self.thirddb.datastore
 
-    cls.third_dbname = 'test_third'
-    cls.third_connstr = _dbconnstr(cls.third_dbname)
-    _create_test_db(cls.third_dbname)
+    def _create_databases(self):
+        # create server and client databases
+        self.serverdb.create_test_db()
+        self.thirddb.create_test_db()
 
-    cls.server_conn = psycopg2.connect(cls.server_connstr)
-    cls.client_conn = psycopg2.connect(cls.client_connstr)
-    cls.third_conn = psycopg2.connect(cls.third_connstr)
+        if not self.same_db:
+            self.clientdb.create_test_db()
 
+        # self.connect()
 
-def _drop_databases(cls, same_db):
-    _drop_db(cls.server_dbname)
-    if not same_db:
-        _drop_db(cls.client_dbname)
-    _drop_db(cls.third_dbname)
+    def _drop_databases(self):
+        self.serverdb.drop_db()
+        if not self.same_db:
+            self.clientdb.drop_db()
+        self.thirddb.drop_db()
+
+    def reconnect_dbs(self):
+        self.close_connections()
+        self.connect()
+
+    def close_connections(self):
+        """Close connections"""
+        logger.debug('Exit server, client, third')
+        if self.server:
+            # This __exit__ will be called by the close() below?
+            # self.server.__exit__()
+            self.server = None
+        if self.client:
+            # self.client.__exit__()
+            self.client = None
+        if self.third:
+            # self.third.__exit__()
+            self.third = None
+
+        logger.debug('Set serverdb, clientdb, thirddb to None')
+        for db_name in ['serverdb', 'clientdb', 'thirddb']:
+            db = getattr(self, db_name)
+            if db:
+                db.close()
+                # Don't set to None as we can still use dbname
+                # setattr(self, db_name, None)
 
 
 class TestPostgresDatastore(_TestDatastore):
-    # These aren't needed, but make warnings go away:
-    server_dbname = None
-    client_dbname = None
-    third_dbname = None
-    client_connstr = None
-    server_connstr = None
-    third_connstr = None
-    client_conn = None
-    server_conn = None
-    third_conn = None
-
-    # SAME_DB: if True, put server/client tables in one DB;
-    # else put one table in two DBs.
-    SAME_DB = True
+    _testdb = None
 
     @classmethod
     def setUpClass(cls):
         super(TestPostgresDatastore, cls).setUpClass()
-        _create_databases(cls, TestPostgresDatastore.SAME_DB)
+        assert cls._testdb is None
+        cls._testdb = _TestDatabases(_PostgresTestDatabase)
+        # cls._testdb = _TestDatabases(_SqliteTestDatabase)
+        cls._testdb.init_dbclass()
+        cls._testdb._create_databases()
+        cls._testdb.connect()
 
     @classmethod
     def tearDownClass(cls):
         super(TestPostgresDatastore, cls).tearDownClass()
-
-        # Close connections
-        for conn_name in ['server_conn', 'client_conn', 'third_conn']:
-            conn = getattr(cls, conn_name)
-            if conn:
-                logger.debug(f'Close conn 2 {conn_name}')
-                conn.close()
-
-        _drop_databases(cls, TestPostgresDatastore.SAME_DB)
+        cls._testdb.close_connections()
+        cls._testdb._drop_databases()
 
     def setUp(self):
         super().setUp()
 
         # Clear tables for server and client
-        _clear_tables(TestPostgresDatastore.server_dbname)
-        _clear_tables(TestPostgresDatastore.client_dbname)
-        _clear_tables(TestPostgresDatastore.third_dbname)
+        # self.testdb._clear_tables(self.testdb.server_dbname)
+        # self.testdb._clear_tables(self.testdb.client_dbname)
+        # self.testdb._clear_tables(self.testdb.third_dbname)
 
-        # HACK: re-connect in order to get the changes from _clear_tables
-        # If I knew what I was doing, the _clear_tables from above would
-        # be seen in these connections without re-connecting
-        cls = TestPostgresDatastore
-        cls.server_conn.close()
-        logger.debug('Closed conn 3 server_conn')
-        cls.server_conn = psycopg2.connect(cls.server_connstr)
-        logger.debug('Connected 3 conn server_conn')
-        cls.client_conn.close()
-        logger.debug('Closed conn 3 client_conn')
-        cls.client_conn = psycopg2.connect(cls.client_connstr)
-        logger.debug('Connected 3 conn client_conn')
-        cls.third_conn.close()
-        logger.debug('Closed conn 3 third_conn')
-        cls.third_conn = psycopg2.connect(cls.third_connstr)
-        logger.debug('Connected 3 conn third_conn')
+        # HACK: re-connect in order to reset sequence_id back to 0.
+        # I could maybe do this directly with the datastore, but this works.
+        # It also clears the tables, so I don't need to run the clear above.
+        self._testdb.reconnect_dbs()
 
-        self.server = PostgresDatastore(
-            'server', TestPostgresDatastore.server_conn, 'docs1',
-            datastore_id='server_id')
-        self.server.__enter__()
-        self.client = PostgresDatastore(
-            'client', TestPostgresDatastore.client_conn, 'docs2',
-            datastore_id='client_id')
-        self.client.__enter__()
-        self.third = PostgresDatastore(
-            'third', TestPostgresDatastore.third_conn, 'docs1',
-            datastore_id='third_id')
-        self.third.__enter__()
-
-    def tearDown(self) -> None:
-        self.server.__exit__()
-        self.client.__exit__()
-        self.third.__exit__()
+        # Allow the test to reference the test databases:
+        self.server = self._testdb.server
+        self.client = self._testdb.client
+        self.third = self._testdb.third
