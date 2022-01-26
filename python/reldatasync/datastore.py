@@ -318,10 +318,157 @@ class MemoryDatastore(Datastore):
         return self.sequence_id, docs
 
 
-class PostgresDatastore(Datastore):
+class DatabaseDatastore(Datastore):
+    """Base datastore for a relational database."""
     def __init__(self, datastore_name: str, conn, tablename: str,
                  datastore_id: str = None):
         super().__init__(datastore_name, datastore_id)
+        self.tablename = tablename
+        self.conn = conn
+
+
+class SqliteDatastore(DatabaseDatastore):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __enter__(self):
+        super().__enter__()
+
+        # TODO: What exactly is our commit policy?
+
+        self.cursor = self.conn.cursor()
+
+        # TODO: Create the data_sync_revisions table if needed?
+
+        # Init sequence_id if not present
+        # "OR IGNORE" requires version 3.24.0 (2018-06-04) or later
+        # See https://sqlite.org/lang_conflict.html
+        # TODO: factor out "OR IGNORE" and ?s with postgres?
+        self.cursor.execute(
+            'INSERT OR IGNORE INTO data_sync_revisions'
+            ' (datastore_id, datastore_name, sequence_id)'
+            ' VALUES (?, ?, 0)',
+            (self.id, self.name))
+
+        # Check that the right tables exist
+        self.cursor.execute('SELECT sequence_id FROM data_sync_revisions')
+        self._sequence_id = self.cursor.fetchone()[0]
+
+        # Get the column names for self.tablename
+        self.cursor.execute(f'SELECT * FROM {self.tablename} LIMIT 0')
+        self.columnnames = [desc[0] for desc in self.cursor.description]
+
+        # Check that self.tablename has _id, _deleted, and _rev
+        for field in (_ID, _REV, _DELETED):
+            if field not in self.columnnames:
+                raise NameError("Field '%s' not in table '%s'" % (
+                    field, self.tablename))
+
+        # TODO: Check self.tablename has a unique index on _id
+        # Required for proper functioning of UPSERT
+
+        # TODO: Check that sequence_id in revisions table is >= max(REV)
+        #   in the data
+
+        return self
+
+    def __exit__(self, *args):
+        super().__exit__()
+        if self.cursor:
+            self.cursor.close()
+
+    def _row_to_doc(self, docrow) -> Document:
+        the_dict = {}
+        assert len(docrow) == len(self.columnnames)
+        for idx in range(len(docrow)):
+            the_dict[self.columnnames[idx]] = docrow[idx]
+        # Treat '_deleted' specially: get rid of it if it's None
+        if the_dict[_DELETED] is None:
+            del the_dict[_DELETED]
+        return Document(the_dict)
+
+    def _set_sequence_id(self, the_id) -> None:
+        # The RETURNING syntax has been supported by Postgres at least
+        # since 9.5.
+        # SQLite started supporting it in version 3.35.0 (2021-03-12).
+        self.cursor.execute(
+            'UPDATE data_sync_revisions set sequence_id = ?'
+            ' RETURNING sequence_id', (the_id,))
+        new_val = self.cursor.fetchone()[0]
+        super()._set_sequence_id(the_id)
+        assert self._sequence_id == new_val, (
+                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+
+    def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
+        """Return doc, or None if not present."""
+        doc = None
+        # TODO: Use include_deleted in the query
+        self.cursor.execute(
+            f'SELECT * FROM {self.tablename} WHERE _id=?',
+            (docid,))
+        docrow = self.cursor.fetchone()
+        if docrow:
+            doc = self._row_to_doc(docrow)
+            # assert there was only one result
+            assert self.cursor.fetchone() is None, 'docid was %s' % docid
+            # Don't include deleted doc
+            if doc.get(_DELETED, False) and not include_deleted:
+                doc = None
+        return doc
+
+    def _put(self, doc: Document) -> None:
+        """Put doc under docid.
+
+        If no seq, give it one.
+        """
+        assert _REV in doc
+
+        # "ON CONFLICT" requires postgres 9.5+
+        set_statement = ', '.join('%s=EXCLUDED.%s ' % (col, col)
+                                  for col in self.columnnames)
+        upsert_statement = (
+            'INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (_id) DO UPDATE'
+            ' SET %s' % (
+                self.tablename,
+                ','.join(self.columnnames),
+                ','.join(['?' for _ in self.columnnames]),
+                set_statement))
+
+        self.cursor.execute(
+            upsert_statement,
+            tuple([doc.get(key, None) for key in self.columnnames]))
+
+    def get_docs_since(self, the_seq: int, num: int) \
+            -> Tuple[int, Sequence[Document]]:
+        """Get docs put with the_seq < seq <= (the_seq+num), ordered by seq.
+
+        This is intended to be called repeatedly to get them all, so as to
+        allow syncing in chunks.
+        """
+        self.cursor.execute(
+            f'SELECT * FROM {self.tablename}'
+            ' WHERE ? < _seq AND _seq <= ?'
+            ' ORDER BY _seq',
+            (the_seq, the_seq + num))
+        docs = [self._row_to_doc(docrow) for docrow in self.cursor.fetchall()]
+        return self.sequence_id, docs
+
+    def _increment_sequence_id(self) -> int:
+        self.cursor.execute(
+            'UPDATE data_sync_revisions set sequence_id = sequence_id+1'
+            ' WHERE datastore_id=?'
+            ' RETURNING sequence_id', (self.id,))
+        new_val = self.cursor.fetchone()[0]
+        super()._increment_sequence_id()
+        assert self._sequence_id == new_val, (
+                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+        return new_val
+
+
+class PostgresDatastore(DatabaseDatastore):
+    def __init__(self, datastore_name: str, conn, tablename: str,
+                 datastore_id: str = None):
+        super().__init__(datastore_name, conn, tablename, datastore_id)
         self.tablename = tablename
         self.conn = conn
 
@@ -444,7 +591,7 @@ class PostgresDatastore(Datastore):
         allow syncing in chunks.
         """
         self.cursor.execute(
-            'SELECT * FROM %s WHERE %%s < _seq AND _seq <= %%s'
+            'SELECT * FROM %s WHERE %%s < _seq AND _seq <= %%s ORDER BY _seq'
             % self.tablename, (the_seq, the_seq + num))
         docs = [self._row_to_doc(docrow) for docrow in self.cursor.fetchall()]
         return self.sequence_id, docs

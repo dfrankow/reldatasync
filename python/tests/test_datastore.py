@@ -1,14 +1,16 @@
 import logging
 import os
 import random
+import sqlite3
 from abc import abstractmethod
+from unittest import SkipTest
 
 import psycopg2
 import unittest
 
 from reldatasync import util
 from reldatasync.datastore import (
-    MemoryDatastore, PostgresDatastore, Datastore)
+    MemoryDatastore, PostgresDatastore, Datastore, SqliteDatastore)
 from reldatasync.document import Document, _REV, _ID, _SEQ, _DELETED
 from reldatasync.replicator import Replicator
 from reldatasync.vectorclock import VectorClock
@@ -46,6 +48,8 @@ class _TestDatastore(unittest.TestCase):
             ds = MemoryDatastore('name')
         elif self.server.__class__ == PostgresDatastore:
             ds = PostgresDatastore('name', None, 'table')
+        elif self.server.__class__ == SqliteDatastore:
+            ds = SqliteDatastore('name', None, 'table')
         self.assertEqual(32, len(ds.id))
         self.assertNotIn('-', ds.id)
 
@@ -200,10 +204,11 @@ class _TestDatastore(unittest.TestCase):
         self.server.delete('A')
         doca = self.server.get('A', include_deleted=True)
         current_seq = 3
+        foo = self.server.get_docs_since(0, 10)
         self.assertEqual(
             # order switched (docc first), since deleting A increased version
             (current_seq, [docc, doca]),
-            self.server.get_docs_since(0, 10))
+            foo)
 
     def test_delete_sync(self):
         """Test that deletes get through syncing"""
@@ -454,27 +459,14 @@ class _TestDatabase:
             self._conn.close()
             self._conn = None
 
-    def create_test_db(self):
-        self._create_test_db1()
-        self._create_test_tables()
-
-    def _create_test_db1(self):
-        def exec_func(curs):
-            if not self.database_exists(self.dbname):
-                curs.execute('CREATE DATABASE %s' % self.dbname)
-            else:
-                logger.info('database %s already exists' % self.dbname)
-        self.exec_sql(exec_func, dbname=None, autocommit=True)
+    @abstractmethod
+    def create_test_db_and_tables(self):
+        pass
 
     def _create_table_if_not_exists(self, tablename: str, definition: str):
         def exec_func(curs):
-            # check for table existence
-            curs.execute(
-                'select * from information_schema.tables where table_name=%s',
-                (tablename,))
-            if not self.table_exists(tablename):
-                # table doesn't exist, create it
-                curs.execute('CREATE TABLE %s (%s)' % (tablename, definition))
+            curs.execute('CREATE TABLE IF NOT EXISTS %s (%s)'
+                         % (tablename, definition))
         self.exec_sql(exec_func, dbname=self.dbname)
 
     def _create_test_tables(self):
@@ -510,21 +502,59 @@ class _TestDatabase:
 
         self.exec_sql(exec_func, dbname=self.dbname)
 
+    @abstractmethod
     def drop_db(self):
-        self.exec_sql(
-            lambda curs: curs.execute('DROP DATABASE %s' % self.dbname))
-
-    @abstractmethod
-    def table_exists(self, table):
-        pass
-
-    @abstractmethod
-    def database_exists(self, database_name):
         pass
 
     @abstractmethod
     def exec_sql(self, exec_func, dbname=None, autocommit=True):
         pass
+
+
+class _SqliteTestDatabase(_TestDatabase):
+    def __init__(self, dbname):
+        super().__init__(dbname)
+
+    def connect(self, table, datastore_id=None):
+        if datastore_id is None:
+            datastore_id = self.dbname + '_id'
+        self._conn = sqlite3.connect(
+            self.dbname,
+            # Set to autocommit for now:
+            isolation_level=None)
+        self.datastore = SqliteDatastore(
+            self.dbname, self._conn, table,
+            datastore_id=datastore_id)
+        self.datastore.__enter__()
+
+    def create_test_db_and_tables(self):
+        # TODO: factor this out
+        self._create_test_tables()
+
+    def exec_sql(self, exec_func, dbname=None, autocommit=True):
+        """Execute some SQL.
+
+        Sometimes we want it with dbname, sometimes without (e.g., when
+           creating the database).
+        Otherwise we'd just keep a cursor around instead.
+        """
+        conn = None
+        cursor = None
+        try:
+            conn = sqlite3.connect(self.dbname)
+            logger.debug(f'Connect 1 {self.dbname}')
+            cursor = conn.cursor()
+            exec_func(cursor)
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+                logger.debug(f'Closed conn 1 {self.dbname}')
+
+    def drop_db(self):
+        # remove the sqlite file
+        os.remove(self.dbname)
 
 
 class _PostgresTestDatabase(_TestDatabase):
@@ -581,7 +611,11 @@ class _PostgresTestDatabase(_TestDatabase):
                 logger.debug(f'Closed conn 1 {connstr}')
         return ret
 
-    def database_exists(self, database_name):
+    def drop_db(self):
+        self.exec_sql(
+            lambda curs: curs.execute('DROP DATABASE %s' % self.dbname))
+
+    def _database_exists(self, database_name):
         def exec_func(curs):
             curs.execute(
                 'SELECT datname FROM pg_catalog.pg_database WHERE datname = %s',
@@ -590,15 +624,17 @@ class _PostgresTestDatabase(_TestDatabase):
             return bool(curs.fetchone())
         return self.exec_sql(exec_func, dbname=None, autocommit=True)
 
-    def table_exists(self, tablename):
-        def exec_func(curs):
-            # check for table existence
-            curs.execute(
-                'select * from information_schema.tables where table_name=%s',
-                (tablename,))
-            return bool(curs.fetchone())
+    def create_test_db_and_tables(self):
+        self._create_test_db()
+        self._create_test_tables()
 
-        return self.exec_sql(exec_func, dbname=self.dbname, autocommit=True)
+    def _create_test_db(self):
+        def exec_func(curs):
+            if not self._database_exists(self.dbname):
+                curs.execute('CREATE DATABASE %s' % self.dbname)
+            else:
+                logger.info('database %s already exists' % self.dbname)
+        self.exec_sql(exec_func, dbname=None, autocommit=True)
 
 
 class _TestDatabases:
@@ -648,11 +684,11 @@ class _TestDatabases:
 
     def _create_databases(self):
         # create server and client databases
-        self.serverdb.create_test_db()
-        self.thirddb.create_test_db()
+        self.serverdb.create_test_db_and_tables()
+        self.thirddb.create_test_db_and_tables()
 
         if not self.same_db:
-            self.clientdb.create_test_db()
+            self.clientdb.create_test_db_and_tables()
 
         # self.connect()
 
@@ -662,8 +698,11 @@ class _TestDatabases:
             self.clientdb.drop_db()
         self.thirddb.drop_db()
 
-    def reconnect_dbs(self):
+    def reconnect_dbs(self, deep=False):
         self.close_connections()
+        if deep:
+            self._drop_databases()
+            self._create_databases()
         self.connect()
 
     def close_connections(self):
@@ -689,22 +728,29 @@ class _TestDatabases:
                 # setattr(self, db_name, None)
 
 
-class TestPostgresDatastore(_TestDatastore):
+class _TestDatabaseDatastore(_TestDatastore):
     _testdb = None
+    _testdbclass = None
+    _deep_reconnect = False
 
     @classmethod
     def setUpClass(cls):
-        super(TestPostgresDatastore, cls).setUpClass()
+        if cls == _TestDatabaseDatastore:
+            # Skipping here allows us to derive from _TestDatabaseDatastore
+            # See also https://stackoverflow.com/a/35304339
+            raise SkipTest('Skip base class test (_TestDatabaseDatastore)')
+
+        super().setUpClass()
         assert cls._testdb is None
-        cls._testdb = _TestDatabases(_PostgresTestDatabase)
-        # cls._testdb = _TestDatabases(_SqliteTestDatabase)
+        # cls._testdb = _TestDatabases(_PostgresTestDatabase)
+        cls._testdb = _TestDatabases(cls._testdbclass)
         cls._testdb.init_dbclass()
         cls._testdb._create_databases()
         cls._testdb.connect()
 
     @classmethod
     def tearDownClass(cls):
-        super(TestPostgresDatastore, cls).tearDownClass()
+        super().tearDownClass()
         cls._testdb.close_connections()
         cls._testdb._drop_databases()
 
@@ -719,9 +765,19 @@ class TestPostgresDatastore(_TestDatastore):
         # HACK: re-connect in order to reset sequence_id back to 0.
         # I could maybe do this directly with the datastore, but this works.
         # It also clears the tables, so I don't need to run the clear above.
-        self._testdb.reconnect_dbs()
+        self._testdb.reconnect_dbs(deep=self._deep_reconnect)
 
         # Allow the test to reference the test databases:
         self.server = self._testdb.server
         self.client = self._testdb.client
         self.third = self._testdb.third
+
+
+class TestPostgresDatastore(_TestDatabaseDatastore):
+    _testdbclass = _PostgresTestDatabase
+
+
+class TestSqliteDatastore(_TestDatabaseDatastore):
+    _testdbclass = _SqliteTestDatabase
+    # sqlite needs more work to reset sequences
+    _deep_reconnect = True
