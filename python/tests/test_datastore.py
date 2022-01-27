@@ -204,11 +204,12 @@ class _TestDatastore(unittest.TestCase):
         self.server.delete('A')
         doca = self.server.get('A', include_deleted=True)
         current_seq = 3
-        foo = self.server.get_docs_since(0, 10)
+        docs = self.server.get_docs_since(0, 10)
         self.assertEqual(
             # order switched (docc first), since deleting A increased version
             (current_seq, [docc, doca]),
-            foo)
+            docs,
+            docs)
 
     def test_delete_sync(self):
         """Test that deletes get through syncing"""
