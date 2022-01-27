@@ -1,6 +1,5 @@
 """An abstraction of a datastore, to use for syncing."""
 import functools
-import sqlite3
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 import logging
@@ -331,9 +330,6 @@ class DatabaseDatastore(Datastore, ABC):
 class SqliteDatastore(DatabaseDatastore):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Check the version
-        if sqlite3.sqlite_version_info < (3, 35, 0):
-            raise Exception('Must be sqlite version 3.35.0 or greater')
 
     def __enter__(self):
         super().__enter__()
