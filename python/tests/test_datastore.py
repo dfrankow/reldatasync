@@ -743,7 +743,6 @@ class _TestDatabaseDatastore(_TestDatastore):
 
         super().setUpClass()
         assert cls._testdb is None
-        # cls._testdb = _TestDatabases(_PostgresTestDatabase)
         cls._testdb = _TestDatabases(cls._testdbclass)
         cls._testdb.init_dbclass()
         cls._testdb._create_databases()
