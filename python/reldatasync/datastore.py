@@ -1,5 +1,6 @@
 """An abstraction of a datastore, to use for syncing."""
 import functools
+import sqlite3
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 import logging
@@ -392,17 +393,22 @@ class SqliteDatastore(DatabaseDatastore):
         # We want to support earlier sqlite versions, so we don't use it.
         # TODO: Test setting different sequence ids for different datastores
         self.cursor.execute('BEGIN')
-        self.cursor.execute(
-            'UPDATE data_sync_revisions set sequence_id = ?'
-            ' WHERE datastore_id=?', (the_id, self.id,))
-        self.cursor.execute(
-            'SELECT sequence_id FROM data_sync_revisions WHERE datastore_id=?',
-            (self.id,))
-        new_val = self.cursor.fetchone()[0]
-        self.cursor.execute('COMMIT')
-        super()._set_sequence_id(the_id)
-        assert self._sequence_id == new_val, (
-                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+        try:
+            self.cursor.execute(
+                'UPDATE data_sync_revisions set sequence_id = ?'
+                ' WHERE datastore_id=?', (the_id, self.id,))
+            self.cursor.execute(
+                'SELECT sequence_id FROM data_sync_revisions'
+                ' WHERE datastore_id=?',
+                (self.id,))
+            new_val = self.cursor.fetchone()[0]
+            self.cursor.execute('COMMIT')
+            super()._set_sequence_id(the_id)
+            assert self._sequence_id == new_val, (
+                    'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+        except sqlite3.Error as err:
+            self.cursor.execute('ROLLBACK')
+            raise err
 
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         """Return doc, or None if not present."""
@@ -462,17 +468,23 @@ class SqliteDatastore(DatabaseDatastore):
         # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
         # We want to support earlier sqlite versions, so we don't use it.
         self.cursor.execute('BEGIN')
-        self.cursor.execute(
-            'UPDATE data_sync_revisions set sequence_id = sequence_id+1'
-            ' WHERE datastore_id=?', (self.id,))
-        self.cursor.execute(
-            'SELECT sequence_id FROM data_sync_revisions WHERE datastore_id=?',
-            (self.id,))
-        new_val = self.cursor.fetchone()[0]
-        self.cursor.execute('COMMIT')
-        super()._increment_sequence_id()
-        assert self._sequence_id == new_val, (
-                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+        try:
+            self.cursor.execute(
+                'UPDATE data_sync_revisions set sequence_id = sequence_id+1'
+                ' WHERE datastore_id=?', (self.id,))
+            self.cursor.execute(
+                'SELECT sequence_id FROM data_sync_revisions'
+                ' WHERE datastore_id=?',
+                (self.id,))
+            new_val = self.cursor.fetchone()[0]
+            self.cursor.execute('COMMIT')
+            super()._increment_sequence_id()
+            assert self._sequence_id == new_val, (
+                    'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+        except sqlite3.Error as err:
+            self.cursor.execute('ROLLBACK')
+            raise err
+
         return new_val
 
 
