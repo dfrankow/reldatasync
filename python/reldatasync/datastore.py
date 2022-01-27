@@ -392,13 +392,18 @@ class SqliteDatastore(DatabaseDatastore):
         return Document(the_dict)
 
     def _set_sequence_id(self, the_id) -> None:
-        # The RETURNING syntax has been supported by Postgres at least
-        # since 9.5.
-        # SQLite started supporting it in version 3.35.0 (2021-03-12).
+        # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
+        # We want to support earlier sqlite versions, so we don't use it.
+        # TODO: Test setting different sequence ids for different datastores
+        self.cursor.execute('BEGIN')
         self.cursor.execute(
             'UPDATE data_sync_revisions set sequence_id = ?'
-            ' RETURNING sequence_id', (the_id,))
+            ' WHERE datastore_id=?', (the_id, self.id,))
+        self.cursor.execute(
+            'SELECT sequence_id FROM data_sync_revisions WHERE datastore_id=?',
+            (self.id,))
         new_val = self.cursor.fetchone()[0]
+        self.cursor.execute('COMMIT')
         super()._set_sequence_id(the_id)
         assert self._sequence_id == new_val, (
                 'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
@@ -458,11 +463,17 @@ class SqliteDatastore(DatabaseDatastore):
         return self.sequence_id, docs
 
     def _increment_sequence_id(self) -> int:
+        # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
+        # We want to support earlier sqlite versions, so we don't use it.
+        self.cursor.execute('BEGIN')
         self.cursor.execute(
             'UPDATE data_sync_revisions set sequence_id = sequence_id+1'
-            ' WHERE datastore_id=?'
-            ' RETURNING sequence_id', (self.id,))
+            ' WHERE datastore_id=?', (self.id,))
+        self.cursor.execute(
+            'SELECT sequence_id FROM data_sync_revisions WHERE datastore_id=?',
+            (self.id,))
         new_val = self.cursor.fetchone()[0]
+        self.cursor.execute('COMMIT')
         super()._increment_sequence_id()
         assert self._sequence_id == new_val, (
                 'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
@@ -540,10 +551,11 @@ class PostgresDatastore(DatabaseDatastore):
     def _set_sequence_id(self, the_id) -> None:
         # The RETURNING syntax has been supported by Postgres at least
         # since 9.5.
-        # SQLite started supporting it in version 3.35.0 (2021-03-12).
+        # TODO: test setting different sequence ids for different datastores
         self.cursor.execute(
             'UPDATE data_sync_revisions set sequence_id = %s'
-            ' RETURNING sequence_id', (the_id,))
+            ' WHERE datastore_id = %s'
+            ' RETURNING sequence_id', (the_id, self.id))
         new_val = self.cursor.fetchone()[0]
         super()._set_sequence_id(the_id)
         assert self._sequence_id == new_val, (
