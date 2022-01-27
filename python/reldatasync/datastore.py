@@ -326,6 +326,17 @@ class DatabaseDatastore(Datastore, ABC):
         super().__init__(datastore_name, datastore_id)
         self.tablename = tablename
         self.conn = conn
+        self.columnnames = None
+
+    def _row_to_doc(self, docrow) -> Document:
+        the_dict = {}
+        assert len(docrow) == len(self.columnnames)
+        for idx in range(len(docrow)):
+            the_dict[self.columnnames[idx]] = docrow[idx]
+        # Treat '_deleted' specially: get rid of it if it's None
+        if the_dict[_DELETED] is None:
+            del the_dict[_DELETED]
+        return Document(the_dict)
 
 
 class SqliteDatastore(DatabaseDatastore):
@@ -383,16 +394,6 @@ class SqliteDatastore(DatabaseDatastore):
         super().__exit__()
         if self.cursor:
             self.cursor.close()
-
-    def _row_to_doc(self, docrow) -> Document:
-        the_dict = {}
-        assert len(docrow) == len(self.columnnames)
-        for idx in range(len(docrow)):
-            the_dict[self.columnnames[idx]] = docrow[idx]
-        # Treat '_deleted' specially: get rid of it if it's None
-        if the_dict[_DELETED] is None:
-            del the_dict[_DELETED]
-        return Document(the_dict)
 
     def _set_sequence_id(self, the_id) -> None:
         # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
@@ -549,16 +550,6 @@ class PostgresDatastore(DatabaseDatastore):
         super().__exit__()
         if self.cursor:
             self.cursor.close()
-
-    def _row_to_doc(self, docrow) -> Document:
-        the_dict = {}
-        assert len(docrow) == len(self.columnnames)
-        for idx in range(len(docrow)):
-            the_dict[self.columnnames[idx]] = docrow[idx]
-        # Treat '_deleted' specially: get rid of it if it's None
-        if the_dict[_DELETED] is None:
-            del the_dict[_DELETED]
-        return Document(the_dict)
 
     def _set_sequence_id(self, the_id) -> None:
         # The RETURNING syntax has been supported by Postgres at least
