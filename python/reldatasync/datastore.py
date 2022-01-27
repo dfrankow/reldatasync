@@ -329,8 +329,14 @@ class DatabaseDatastore(Datastore, ABC):
 
 
 class SqliteDatastore(DatabaseDatastore):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, datastore_name: str, conn, tablename: str,
+                 datastore_id: str = None):
+        super().__init__(datastore_name, conn, tablename, datastore_id)
+        # check sqlite version
+        if sqlite3.sqlite_version_info < (3, 24, 0):
+            raise Exception(
+                f'sqlite version is {sqlite3.sqlite_version},'
+                ' must be at least 3.24.0')
 
     def __enter__(self):
         super().__enter__()
@@ -492,8 +498,6 @@ class PostgresDatastore(DatabaseDatastore):
     def __init__(self, datastore_name: str, conn, tablename: str,
                  datastore_id: str = None):
         super().__init__(datastore_name, conn, tablename, datastore_id)
-        self.tablename = tablename
-        self.conn = conn
 
     def __enter__(self):
         super().__enter__()
