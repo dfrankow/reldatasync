@@ -5,7 +5,7 @@ from reldatasync_app.models import SyncableModel
 
 
 class Organization(SyncableModel):
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, unique=True)
 
     class DatastoreMeta:
         datastore_name = 'reldatasync_project_server'
