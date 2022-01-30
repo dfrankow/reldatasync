@@ -520,8 +520,8 @@ class _TestDatabase:
             self._create_table_if_not_exists('docs2', docs_def)
         self.exec_sql(exec_func, dbname=self.dbname)
 
-    def _clear_tables(self):
-        logger.debug(f'_clear_tables {self.dbname}')
+    def clear_and_reset_tables(self):
+        logger.debug(f'clear_and_reset_tables {self.dbname}')
 
         def exec_func(curs):
             # reset sequence_id so tests start from 0
@@ -532,10 +532,6 @@ class _TestDatabase:
             curs.execute('DELETE FROM docs2')
 
         self.exec_sql(exec_func, dbname=self.dbname)
-
-    def clear_and_reset(self):
-        # TODO: remove clear_and_reset, just use _clear_tables?
-        self._clear_tables()
 
     @abstractmethod
     def drop_db(self):
@@ -796,9 +792,9 @@ class _TestDatabaseDatastore(_TestDatastore):
         super().setUp()
 
         # Clear tables
-        self._testdbs.serverdb.clear_and_reset()
-        self._testdbs.clientdb.clear_and_reset()
-        self._testdbs.thirddb.clear_and_reset()
+        self._testdbs.serverdb.clear_and_reset_tables()
+        self._testdbs.clientdb.clear_and_reset_tables()
+        self._testdbs.thirddb.clear_and_reset_tables()
 
         # Put values back in tables
         self._testdbs.init_dbclass()
