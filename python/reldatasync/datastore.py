@@ -129,11 +129,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         return self._sequence_id
 
     def _set_sequence_id(self, the_id) -> None:
-        """Set sequence id to the_id.
-
-        :param the_id  value to set
-        :param force  If force=True, allow setting it backwards.
-                      Should only be used for testing."""
+        """Set sequence id to the_id."""
         if the_id < self._sequence_id:
             raise ValueError(f'Setting sequence_id backwards,'
                              f' from {self._sequence_id} to {the_id}')
