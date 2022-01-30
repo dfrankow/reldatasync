@@ -405,7 +405,7 @@ class DatabaseDatastore(Datastore, ABC):
             if new_val:
                 # Already an id, use it
                 self.id = new_val[0]
-                self._sequence_id = new_val[1]
+                super()._set_sequence_id(new_val[1])
                 logger.debug(f'set self.id to {self.id},'
                              f' _sequence_id to {self._sequence_id}')
             else:
@@ -416,7 +416,7 @@ class DatabaseDatastore(Datastore, ABC):
                     ' (datastore_id, datastore_name, sequence_id)'
                     f' VALUES ({self.placeholder}, {self.placeholder}, 0)',
                     (self.id, self.name))
-                self._sequence_id = 0
+                super()._set_sequence_id(0)
                 logger.debug(f'set self.id to {self.id},'
                              f' _sequence_id to {self._sequence_id}')
             self.cursor.execute('COMMIT')
