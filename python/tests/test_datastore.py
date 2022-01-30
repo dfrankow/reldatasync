@@ -43,15 +43,40 @@ class _TestDatastore(unittest.TestCase):
         self.assertTrue(ds1.check())
         self.assertTrue(ds2.check())
 
-    def test_datastore_id(self):
+    def _get_datastore(self, ds, table):
         if self.server.__class__ == MemoryDatastore:
             ds = MemoryDatastore('name')
         elif self.server.__class__ == PostgresDatastore:
-            ds = PostgresDatastore('name', None, 'table')
+            ds = PostgresDatastore(
+                'name', ds.conn if ds else None, table)
         elif self.server.__class__ == SqliteDatastore:
-            ds = SqliteDatastore('name', None, 'table')
+            ds = SqliteDatastore(
+                'name', ds.conn if ds else None, table)
+        return ds
+
+    def test_datastore_id(self):
+        # datastore without an id is assigned a random one
+        ds = self._get_datastore(None, None)
         self.assertEqual(32, len(ds.id))
         self.assertNotIn('-', ds.id)
+
+        # Don't check persistence of id (below) for MemoryDatastore
+        if self.server.__class__ == MemoryDatastore:
+            return
+
+        # datastore id is assigned to a new datastore
+        ds = self._get_datastore(self.server, 'docs1')
+        # need to use 'with' to execute __enter__
+        with ds:
+            id1 = ds.id
+            self.assertEqual(32, len(ds.id))
+            self.assertNotIn('-', ds.id)
+
+        # If we make a new datastore with same name,
+        # it has the same id as before
+        ds = self._get_datastore(self.server, 'docs1')
+        with ds:
+            self.assertEqual(id1, ds.id)
 
     def test_new_rev_and_seq(self):
         rev = ''
@@ -445,8 +470,13 @@ class TestMemoryDatastore(_TestDatastore):
 
 
 class _TestDatabase:
-    def __init__(self, dbname):
+    def __init__(self, dbname, dsname):
+        """
+        :param dbname:   Name of the database
+        :param dsname:   Name of the datastore
+        """
         self.dbname = dbname
+        self.dsname = dsname
 
         self._conn = None
         self.datastore = None
@@ -471,7 +501,7 @@ class _TestDatabase:
         self.exec_sql(exec_func, dbname=self.dbname)
 
     def _create_test_tables(self):
-        def exec_func(curs):
+        def exec_func(_curs):
             self._create_table_if_not_exists(
                 'data_sync_revisions',
                 'datastore_id varchar(100) not null,'
@@ -491,17 +521,21 @@ class _TestDatabase:
         self.exec_sql(exec_func, dbname=self.dbname)
 
     def _clear_tables(self):
-        # logger.debug(f"_clear_tables {dbname}")
+        logger.debug(f'_clear_tables {self.dbname}')
+
         def exec_func(curs):
-            curs.execute('DELETE FROM data_sync_revisions')
+            # reset sequence_id so tests start from 0
+            # this breaks the abstraction barrier, but means the datastore
+            # classes don't have to do twisted things just for testing
+            curs.execute('UPDATE data_sync_revisions SET sequence_id = 0')
             curs.execute('DELETE FROM docs1')
             curs.execute('DELETE FROM docs2')
 
-            curs.execute('SELECT sequence_id FROM data_sync_revisions')
-            result = curs.fetchone()
-            assert result is None
-
         self.exec_sql(exec_func, dbname=self.dbname)
+
+    def clear_and_reset(self):
+        # TODO: remove clear_and_reset, just use _clear_tables?
+        self._clear_tables()
 
     @abstractmethod
     def drop_db(self):
@@ -513,18 +547,16 @@ class _TestDatabase:
 
 
 class _SqliteTestDatabase(_TestDatabase):
-    def __init__(self, dbname):
-        super().__init__(dbname)
-
-    def connect(self, table, datastore_id=None):
+    # TODO: factor out connect
+    def connect(self, table, datastore_id=None, init_seq=True):
         if datastore_id is None:
             datastore_id = self.dbname + '_id'
         self._conn = sqlite3.connect(
             self.dbname,
-            # Set to autocommit for now:
+            # Set to autocommit:
             isolation_level=None)
         self.datastore = SqliteDatastore(
-            self.dbname, self._conn, table,
+            self.dsname, self._conn, table,
             datastore_id=datastore_id)
         self.datastore.__enter__()
 
@@ -559,12 +591,14 @@ class _SqliteTestDatabase(_TestDatabase):
 
 
 class _PostgresTestDatabase(_TestDatabase):
-    def connect(self, table, datastore_id=None):
+    # TODO: factor out connect
+    def connect(self, table, datastore_id=None, init_seq=True):
         if datastore_id is None:
             datastore_id = self.dbname + '_id'
         self._conn = psycopg2.connect(self._dbconnstr(self.dbname))
+        self._conn.autocommit = True
         self.datastore = PostgresDatastore(
-            self.dbname, self._conn, table,
+            self.dsname, self._conn, table,
             datastore_id=datastore_id)
         self.datastore.__enter__()
 
@@ -640,9 +674,15 @@ class _PostgresTestDatabase(_TestDatabase):
 
 class _TestDatabases:
     def __init__(self, testdbclass):
+        # dbname is the database in which the datastore will live
         self.server_dbname = 'server'
         self.client_dbname = 'client'
         self.third_dbname = 'third'
+
+        # dsname is the name of the datastore, no matter where it lives
+        self.server_dsname = 'server'
+        self.client_dsname = 'client'
+        self.third_dsname = 'third'
 
         # SAME_DB: if True, put server/client tables in one DB;
         # else put one table in two DBs.
@@ -650,8 +690,6 @@ class _TestDatabases:
 
         if self.same_db:
             self.client_dbname = self.server_dbname
-        else:
-            self.client_dbname = 'test_client'
 
         self.testdbclass = testdbclass
 
@@ -666,9 +704,9 @@ class _TestDatabases:
 
     def init_dbclass(self):
         logger.debug('Set up server, client, third')
-        self.serverdb = self.testdbclass(self.server_dbname)
-        self.clientdb = self.testdbclass(self.client_dbname)
-        self.thirddb = self.testdbclass(self.third_dbname)
+        self.serverdb = self.testdbclass(self.server_dbname, self.server_dsname)
+        self.clientdb = self.testdbclass(self.client_dbname, self.client_dsname)
+        self.thirddb = self.testdbclass(self.third_dbname, self.third_dsname)
 
     def connect(self):
         self.serverdb.connect('docs1')
@@ -730,7 +768,7 @@ class _TestDatabases:
 
 
 class _TestDatabaseDatastore(_TestDatastore):
-    _testdb = None
+    _testdbs = None
     _testdbclass = None
     _deep_reconnect = False
 
@@ -742,35 +780,38 @@ class _TestDatabaseDatastore(_TestDatastore):
             raise SkipTest('Skip base class test (_TestDatabaseDatastore)')
 
         super().setUpClass()
-        assert cls._testdb is None
-        cls._testdb = _TestDatabases(cls._testdbclass)
-        cls._testdb.init_dbclass()
-        cls._testdb._create_databases()
-        cls._testdb.connect()
+        assert cls._testdbs is None
+        cls._testdbs = _TestDatabases(cls._testdbclass)
+        cls._testdbs.init_dbclass()
+        cls._testdbs._create_databases()
+        cls._testdbs.connect()
 
     @classmethod
     def tearDownClass(cls):
         super().tearDownClass()
-        cls._testdb.close_connections()
-        cls._testdb._drop_databases()
+        cls._testdbs.close_connections()
+        cls._testdbs._drop_databases()
 
     def setUp(self):
         super().setUp()
 
-        # Clear tables for server and client
-        # self.testdb._clear_tables(self.testdb.server_dbname)
-        # self.testdb._clear_tables(self.testdb.client_dbname)
-        # self.testdb._clear_tables(self.testdb.third_dbname)
+        # Clear tables
+        self._testdbs.serverdb.clear_and_reset()
+        self._testdbs.clientdb.clear_and_reset()
+        self._testdbs.thirddb.clear_and_reset()
+
+        # Put values back in tables
+        self._testdbs.init_dbclass()
 
         # HACK: re-connect in order to reset sequence_id back to 0.
         # I could maybe do this directly with the datastore, but this works.
         # It also clears the tables, so I don't need to run the clear above.
-        self._testdb.reconnect_dbs(deep=self._deep_reconnect)
+        self._testdbs.reconnect_dbs(deep=self._deep_reconnect)
 
         # Allow the test to reference the test databases:
-        self.server = self._testdb.server
-        self.client = self._testdb.client
-        self.third = self._testdb.third
+        self.server = self._testdbs.server
+        self.client = self._testdbs.client
+        self.third = self._testdbs.third
 
 
 class TestPostgresDatastore(_TestDatabaseDatastore):

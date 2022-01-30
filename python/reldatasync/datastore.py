@@ -7,6 +7,7 @@ import logging
 
 from typing import Sequence, Generic, Tuple
 
+import psycopg2
 import requests
 
 from reldatasync import util
@@ -96,6 +97,8 @@ class Datastore(Generic[ID_TYPE], ABC):
         _, docs2 = other.get_docs_since(0, max_docs)
 
         if len(docs1) != len(docs2):
+            logger.debug(
+                f'len(docs1) = {len(docs1)} != len(docs2) = {len(docs2)}')
             return False
 
         def compare_no_seq(a, b):
@@ -126,7 +129,14 @@ class Datastore(Generic[ID_TYPE], ABC):
         return self._sequence_id
 
     def _set_sequence_id(self, the_id) -> None:
-        assert the_id >= self._sequence_id
+        """Set sequence id to the_id.
+
+        :param the_id  value to set
+        :param force  If force=True, allow setting it backwards.
+                      Should only be used for testing."""
+        if the_id < self._sequence_id:
+            raise ValueError(f'Setting sequence_id backwards,'
+                             f' from {self._sequence_id} to {the_id}')
         self._sequence_id = the_id
 
     @property
@@ -149,6 +159,10 @@ class Datastore(Generic[ID_TYPE], ABC):
         rev = VectorClock.from_string(rev_str)
         rev.set_clock(self.id, seq_id)
         return str(rev), seq_id
+
+    @abstractmethod
+    def _put(self, doc: Document):
+        pass
 
     def put(self, doc: Document, increment_rev=False) -> Tuple[int, Document]:
         """Put doc under docid if rev is greater, or doc doesn't currently exist
@@ -328,6 +342,10 @@ class DatabaseDatastore(Datastore, ABC):
         self.conn = conn
         self.columnnames = None
 
+        # set in child class
+        self.placeholder = None
+        self.errorclass = None
+
     def _row_to_doc(self, docrow) -> Document:
         the_dict = {}
         assert len(docrow) == len(self.columnnames)
@@ -337,17 +355,6 @@ class DatabaseDatastore(Datastore, ABC):
         if the_dict[_DELETED] is None:
             del the_dict[_DELETED]
         return Document(the_dict)
-
-
-class SqliteDatastore(DatabaseDatastore):
-    def __init__(self, datastore_name: str, conn, tablename: str,
-                 datastore_id: str = None):
-        super().__init__(datastore_name, conn, tablename, datastore_id)
-        # check sqlite version
-        if sqlite3.sqlite_version_info < (3, 24, 0):
-            raise Exception(
-                f'sqlite version is {sqlite3.sqlite_version},'
-                ' must be at least 3.24.0')
 
     def __enter__(self):
         super().__enter__()
@@ -359,18 +366,8 @@ class SqliteDatastore(DatabaseDatastore):
         # TODO: Create the data_sync_revisions table if needed?
 
         # Init sequence_id if not present
-        # "OR IGNORE" requires version 3.24.0 (2018-06-04) or later
-        # See https://sqlite.org/lang_conflict.html
-        # TODO: factor out "OR IGNORE" and ?s with postgres?
-        self.cursor.execute(
-            'INSERT OR IGNORE INTO data_sync_revisions'
-            ' (datastore_id, datastore_name, sequence_id)'
-            ' VALUES (?, ?, 0)',
-            (self.id, self.name))
-
         # Check that the right tables exist
-        self.cursor.execute('SELECT sequence_id FROM data_sync_revisions')
-        self._sequence_id = self.cursor.fetchone()[0]
+        self._init_datastore_id()
 
         # Get the column names for self.tablename
         self.cursor.execute(f'SELECT * FROM {self.tablename} LIMIT 0')
@@ -394,6 +391,60 @@ class SqliteDatastore(DatabaseDatastore):
         super().__exit__()
         if self.cursor:
             self.cursor.close()
+
+    def _init_datastore_id(self):
+        """Init datastore id and sequence_id.
+
+        Sets self.id and self._sequence_id.
+        If an entry exists in the table use it, else initialize that entry.
+
+        Also raises an exception if the table doesn't exist."""
+        self.cursor.execute('BEGIN')
+        try:
+            self.cursor.execute(
+                'SELECT datastore_id, sequence_id FROM data_sync_revisions'
+                f' WHERE datastore_name={self.placeholder}',
+                (self.name,))
+            new_val = self.cursor.fetchone()
+            if new_val:
+                # Already an id, use it
+                self.id = new_val[0]
+                self._sequence_id = new_val[1]
+                logger.debug(f'set self.id to {self.id},'
+                             f' _sequence_id to {self._sequence_id}')
+            else:
+                # No id, insert one
+                assert self.id is not None
+                self.cursor.execute(
+                    'INSERT INTO data_sync_revisions'
+                    ' (datastore_id, datastore_name, sequence_id)'
+                    f' VALUES ({self.placeholder}, {self.placeholder}, 0)',
+                    (self.id, self.name))
+                self._sequence_id = 0
+                logger.debug(f'set self.id to {self.id},'
+                             f' _sequence_id to {self._sequence_id}')
+            self.cursor.execute('COMMIT')
+        except self.errorclass as err:
+            self.cursor.execute('ROLLBACK')
+            raise err
+
+
+class SqliteDatastore(DatabaseDatastore):
+    def __init__(self, datastore_name: str, conn, tablename: str,
+                 datastore_id: str = None):
+        super().__init__(datastore_name, conn, tablename, datastore_id)
+        # check sqlite version
+        if sqlite3.sqlite_version_info < (3, 24, 0):
+            raise Exception(
+                f'sqlite version is {sqlite3.sqlite_version},'
+                ' must be at least 3.24.0')
+        # TODO: lift this restriction
+        if conn and conn.isolation_level is not None:
+            raise Exception('conn.isolation_level must be None')
+
+        # set up SQL vars
+        self.placeholder = '?'
+        self.errorclass = sqlite3.Error
 
     def _set_sequence_id(self, the_id) -> None:
         # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
@@ -499,57 +550,11 @@ class PostgresDatastore(DatabaseDatastore):
     def __init__(self, datastore_name: str, conn, tablename: str,
                  datastore_id: str = None):
         super().__init__(datastore_name, conn, tablename, datastore_id)
-
-    def __enter__(self):
-        super().__enter__()
-
-        # TODO: What exactly is our commit policy?
-        # self.conn.set_isolation_level(
-        #     psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-
-        self.cursor = self.conn.cursor()
-
-        # TODO: Create the data_sync_revisions table if needed?
-
-        # Init sequence_id if not present
-        # "ON CONFLICT" requires postgres 9.5+
-        # See also https://stackoverflow.com/a/17267423
-        # See also https://stackoverflow.com/a/30118648
-        self.cursor.execute(
-            'INSERT INTO data_sync_revisions'
-            ' (datastore_id, datastore_name, sequence_id)'
-            ' VALUES (%s, %s, 0)'
-            ' ON CONFLICT DO NOTHING', (self.id, self.name))
-
-        # Check that the right tables exist
-        self.cursor.execute('SELECT sequence_id FROM data_sync_revisions')
-        self._sequence_id = self.cursor.fetchone()[0]
-
-        # Get the column names for self.tablename
-        self.cursor.execute('SELECT * FROM %s LIMIT 0' % self.tablename)
-        self.columnnames = [desc[0] for desc in self.cursor.description]
-        # self.nonid_columnnames = [name for name in self.columnnames
-        #                           if name != _ID]
-
-        # Check that self.tablename has _id, _deleted, and _rev
-        for field in (_ID, _REV, _DELETED):
-            if field not in self.columnnames:
-                raise NameError("Field '%s' not in table '%s'" % (
-                    field, self.tablename))
-
-        # TODO: Check self.tablename has a unique index on _id
-        # Required for proper functioning of Postgres UPSERT
-        # See also https://stackoverflow.com/a/36799500
-
-        # TODO: Check that sequence_id in revisions table is >= max(REV)
-        #   in the data
-
-        return self
-
-    def __exit__(self, *args):
-        super().__exit__()
-        if self.cursor:
-            self.cursor.close()
+        self.placeholder = '%s'
+        self.errorclass = psycopg2.Error
+        # TODO: lift this restriction
+        if conn and not conn.autocommit:
+            raise Exception('conn.autocommit must be True')
 
     def _set_sequence_id(self, the_id) -> None:
         # The RETURNING syntax has been supported by Postgres at least
@@ -642,6 +647,10 @@ class RestClientSourceDatastore(Datastore):
         if resp.status_code == 200:
             ret = resp.json()
         return ret
+
+    def _put(self, doc: Document):
+        # We re-implemented put(), so we don't need _put()
+        raise Exception('Not implemented')
 
     def put(self, doc: Document, increment_rev=False) -> Tuple[int, Document]:
         logger.debug(f'RCSD {self.datastore}: put doc {doc}'
