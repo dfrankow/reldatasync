@@ -544,12 +544,12 @@ class _TestDatabase:
 
 class _SqliteTestDatabase(_TestDatabase):
     # TODO: factor out connect
-    def connect(self, table, datastore_id=None, init_seq=True):
+    def connect(self, table, datastore_id=None):
         if datastore_id is None:
             datastore_id = self.dbname + '_id'
         self._conn = sqlite3.connect(
             self.dbname,
-            # Set to autocommit:
+            # Use autocommit to not need transactions:
             isolation_level=None)
         self.datastore = SqliteDatastore(
             self.dsname, self._conn, table,
@@ -588,11 +588,12 @@ class _SqliteTestDatabase(_TestDatabase):
 
 class _PostgresTestDatabase(_TestDatabase):
     # TODO: factor out connect
-    def connect(self, table, datastore_id=None, init_seq=True):
+    def connect(self, table, datastore_id=None):
         if datastore_id is None:
             datastore_id = self.dbname + '_id'
         self._conn = psycopg2.connect(self._dbconnstr(self.dbname))
-        self._conn.autocommit = True
+        # If we want to test with autocommit:
+        # self._conn.autocommit = True
         self.datastore = PostgresDatastore(
             self.dsname, self._conn, table,
             datastore_id=datastore_id)
