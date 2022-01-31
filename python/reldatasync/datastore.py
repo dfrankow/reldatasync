@@ -7,7 +7,6 @@ import logging
 
 from typing import Sequence, Generic, Tuple
 
-import psycopg2
 import requests
 
 from reldatasync import util
@@ -340,7 +339,6 @@ class DatabaseDatastore(Datastore, ABC):
 
         # set in child class
         self.placeholder = None
-        self.errorclass = None
 
     def _row_to_doc(self, docrow) -> Document:
         the_dict = {}
@@ -395,34 +393,61 @@ class DatabaseDatastore(Datastore, ABC):
         If an entry exists in the table use it, else initialize that entry.
 
         Also raises an exception if the table doesn't exist."""
-        self.cursor.execute('BEGIN')
-        try:
+        self.cursor.execute(
+            'SELECT datastore_id, sequence_id FROM data_sync_revisions'
+            f' WHERE datastore_name={self.placeholder}',
+            (self.name,))
+        new_val = self.cursor.fetchone()
+        if new_val:
+            # Already an id, use it
+            self.id = new_val[0]
+            super()._set_sequence_id(new_val[1])
+            logger.debug(f'set self.id to {self.id},'
+                         f' _sequence_id to {self._sequence_id}')
+        else:
+            # No id, insert one
+            assert self.id is not None
             self.cursor.execute(
-                'SELECT datastore_id, sequence_id FROM data_sync_revisions'
-                f' WHERE datastore_name={self.placeholder}',
-                (self.name,))
-            new_val = self.cursor.fetchone()
-            if new_val:
-                # Already an id, use it
-                self.id = new_val[0]
-                super()._set_sequence_id(new_val[1])
-                logger.debug(f'set self.id to {self.id},'
-                             f' _sequence_id to {self._sequence_id}')
-            else:
-                # No id, insert one
-                assert self.id is not None
-                self.cursor.execute(
-                    'INSERT INTO data_sync_revisions'
-                    ' (datastore_id, datastore_name, sequence_id)'
-                    f' VALUES ({self.placeholder}, {self.placeholder}, 0)',
-                    (self.id, self.name))
-                super()._set_sequence_id(0)
-                logger.debug(f'set self.id to {self.id},'
-                             f' _sequence_id to {self._sequence_id}')
-            self.cursor.execute('COMMIT')
-        except self.errorclass as err:
-            self.cursor.execute('ROLLBACK')
-            raise err
+                'INSERT INTO data_sync_revisions'
+                ' (datastore_id, datastore_name, sequence_id)'
+                f' VALUES ({self.placeholder}, {self.placeholder}, 0)',
+                (self.id, self.name))
+            super()._set_sequence_id(0)
+            logger.debug(f'set self.id to {self.id},'
+                         f' _sequence_id to {self._sequence_id}')
+
+    def _set_sequence_id(self, the_id) -> None:
+        # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
+        # We want to support earlier sqlite versions, so we don't use it.
+        # TODO: Test setting different sequence ids for different datastores
+        self.cursor.execute(
+            f'UPDATE data_sync_revisions set sequence_id = {self.placeholder}'
+            f' WHERE datastore_id={self.placeholder}', (the_id, self.id,))
+        self.cursor.execute(
+            'SELECT sequence_id FROM data_sync_revisions'
+            f' WHERE datastore_id={self.placeholder}',
+            (self.id,))
+        new_val = self.cursor.fetchone()[0]
+        super()._set_sequence_id(the_id)
+        assert self._sequence_id == new_val, (
+                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+
+    def _increment_sequence_id(self) -> int:
+        # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
+        # We want to support earlier sqlite versions, so we don't use it.
+        self.cursor.execute(
+            'UPDATE data_sync_revisions set sequence_id = sequence_id+1'
+            f' WHERE datastore_id={self.placeholder}', (self.id,))
+        self.cursor.execute(
+            'SELECT sequence_id FROM data_sync_revisions'
+            f' WHERE datastore_id={self.placeholder}',
+            (self.id,))
+        new_val = self.cursor.fetchone()[0]
+        super()._increment_sequence_id()
+        assert self._sequence_id == new_val, (
+                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+
+        return new_val
 
 
 class SqliteDatastore(DatabaseDatastore):
@@ -434,35 +459,9 @@ class SqliteDatastore(DatabaseDatastore):
             raise Exception(
                 f'sqlite version is {sqlite3.sqlite_version},'
                 ' must be at least 3.24.0')
-        # TODO: lift this restriction
-        if conn and conn.isolation_level is not None:
-            raise Exception('conn.isolation_level must be None')
 
         # set up SQL vars
         self.placeholder = '?'
-        self.errorclass = sqlite3.Error
-
-    def _set_sequence_id(self, the_id) -> None:
-        # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
-        # We want to support earlier sqlite versions, so we don't use it.
-        # TODO: Test setting different sequence ids for different datastores
-        self.cursor.execute('BEGIN')
-        try:
-            self.cursor.execute(
-                'UPDATE data_sync_revisions set sequence_id = ?'
-                ' WHERE datastore_id=?', (the_id, self.id,))
-            self.cursor.execute(
-                'SELECT sequence_id FROM data_sync_revisions'
-                ' WHERE datastore_id=?',
-                (self.id,))
-            new_val = self.cursor.fetchone()[0]
-            self.cursor.execute('COMMIT')
-            super()._set_sequence_id(the_id)
-            assert self._sequence_id == new_val, (
-                    'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
-        except sqlite3.Error as err:
-            self.cursor.execute('ROLLBACK')
-            raise err
 
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         """Return doc, or None if not present."""
@@ -518,39 +517,12 @@ class SqliteDatastore(DatabaseDatastore):
         docs = [self._row_to_doc(docrow) for docrow in self.cursor.fetchall()]
         return self.sequence_id, docs
 
-    def _increment_sequence_id(self) -> int:
-        # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
-        # We want to support earlier sqlite versions, so we don't use it.
-        self.cursor.execute('BEGIN')
-        try:
-            self.cursor.execute(
-                'UPDATE data_sync_revisions set sequence_id = sequence_id+1'
-                ' WHERE datastore_id=?', (self.id,))
-            self.cursor.execute(
-                'SELECT sequence_id FROM data_sync_revisions'
-                ' WHERE datastore_id=?',
-                (self.id,))
-            new_val = self.cursor.fetchone()[0]
-            self.cursor.execute('COMMIT')
-            super()._increment_sequence_id()
-            assert self._sequence_id == new_val, (
-                    'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
-        except sqlite3.Error as err:
-            self.cursor.execute('ROLLBACK')
-            raise err
-
-        return new_val
-
 
 class PostgresDatastore(DatabaseDatastore):
     def __init__(self, datastore_name: str, conn, tablename: str,
                  datastore_id: str = None):
         super().__init__(datastore_name, conn, tablename, datastore_id)
         self.placeholder = '%s'
-        self.errorclass = psycopg2.Error
-        # TODO: lift this restriction
-        if conn and not conn.autocommit:
-            raise Exception('conn.autocommit must be True')
 
     def _set_sequence_id(self, the_id) -> None:
         # The RETURNING syntax has been supported by Postgres at least
@@ -561,9 +533,20 @@ class PostgresDatastore(DatabaseDatastore):
             ' WHERE datastore_id = %s'
             ' RETURNING sequence_id', (the_id, self.id))
         new_val = self.cursor.fetchone()[0]
-        super()._set_sequence_id(the_id)
+        self._sequence_id = the_id
         assert self._sequence_id == new_val, (
                 'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+
+    def _increment_sequence_id(self) -> int:
+        self.cursor.execute(
+            'UPDATE data_sync_revisions set sequence_id = sequence_id+1'
+            ' WHERE datastore_id=%s'
+            ' RETURNING sequence_id', (self.id,))
+        new_val = self.cursor.fetchone()[0]
+        self._sequence_id += 1
+        assert self._sequence_id == new_val, (
+                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+        return new_val
 
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         """Return doc, or None if not present."""
@@ -615,17 +598,6 @@ class PostgresDatastore(DatabaseDatastore):
             % self.tablename, (the_seq, the_seq + num))
         docs = [self._row_to_doc(docrow) for docrow in self.cursor.fetchall()]
         return self.sequence_id, docs
-
-    def _increment_sequence_id(self) -> int:
-        self.cursor.execute(
-            'UPDATE data_sync_revisions set sequence_id = sequence_id+1'
-            ' WHERE datastore_id=%s'
-            ' RETURNING sequence_id', (self.id,))
-        new_val = self.cursor.fetchone()[0]
-        super()._increment_sequence_id()
-        assert self._sequence_id == new_val, (
-                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
-        return new_val
 
 
 class RestClientSourceDatastore(Datastore):
