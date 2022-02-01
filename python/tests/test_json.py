@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 
 from reldatasync.document import Document
 from reldatasync.json import JsonEncoder, JsonDecoder
+from reldatasync.schema import Schema
 from reldatasync.util import uuid4_string
 
 
@@ -62,26 +63,26 @@ class TestJson(unittest.TestCase):
         # and that causes an error when comparing
         with self.assertRaises(TypeError):
             self.assertNotEqual(self.doc, doc)
-        schema = {'_id': 'TEXT',
-                  'int': 'INTEGER',
-                  'boolean': 'BOOLEAN',
-                  'real': 'REAL',
-                  'text': 'TEXT',
-                  'date': 'DATE',
-                  'dt_naive': 'DATETIME',
-                  'dt_aware': 'DATETIME',
-                  'dt_now': 'DATETIME'}
+        schema = Schema({'_id': 'TEXT',
+                         'int': 'INTEGER',
+                         'boolean': 'BOOLEAN',
+                         'real': 'REAL',
+                         'text': 'TEXT',
+                         'date': 'DATE',
+                         'dt_naive': 'DATETIME',
+                         'dt_aware': 'DATETIME',
+                         'dt_now': 'DATETIME'})
 
         # without enough schema, we get an error
         with self.assertRaises(KeyError):
             JsonDecoder(schema=schema).decode(doc_str)
 
         # with a botched schema, we get an error
-        schema['dt_now_aware'] = 'OOPS'
+        schema.set_field_type('dt_now_aware', 'OOPS')
         with self.assertRaises(ValueError):
             JsonDecoder(schema=schema).decode(doc_str)
 
         # with full schema, we parse correctly
-        schema['dt_now_aware'] = 'DATETIME'
+        schema.set_field_type('dt_now_aware', 'DATETIME')
         doc = JsonDecoder(schema=schema).decode(doc_str)
         self.assertEqual(self.doc, doc)
