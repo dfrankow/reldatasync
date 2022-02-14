@@ -49,7 +49,7 @@ class JsonDecoder:
         if self.schema:
             # Use the schema to decode
             for key, val in doc.items():
-                key_type = self.schema[key]
+                key_type = self.schema.field_type(key)
 
                 if key_type == 'DATETIME':
                     doc[key] = datetime.fromisoformat(val)

@@ -449,6 +449,29 @@ class DatabaseDatastore(Datastore, ABC):
 
         return new_val
 
+    def _put(self, doc: Document) -> None:
+        """Put doc under docid.
+
+        If no seq, give it one.
+        """
+        assert _REV in doc
+
+        # "ON CONFLICT" added to sqlite upsert in version 3.24.0 (2018-06-04)
+        # "ON CONFLICT" requires Postgres 9.5+
+        set_statement = ', '.join('%s=EXCLUDED.%s ' % (col, col)
+                                  for col in self.columnnames)
+        upsert_statement = (
+            'INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (_id) DO UPDATE'
+            ' SET %s' % (
+                self.tablename,
+                ','.join(self.columnnames),
+                ','.join([self.placeholder for _ in self.columnnames]),
+                set_statement))
+
+        self.cursor.execute(
+            upsert_statement,
+            tuple([doc.get(key, None) for key in self.columnnames]))
+
 
 class SqliteDatastore(DatabaseDatastore):
     def __init__(self, datastore_name: str, conn, tablename: str,
@@ -479,28 +502,6 @@ class SqliteDatastore(DatabaseDatastore):
             if doc.get(_DELETED, False) and not include_deleted:
                 doc = None
         return doc
-
-    def _put(self, doc: Document) -> None:
-        """Put doc under docid.
-
-        If no seq, give it one.
-        """
-        assert _REV in doc
-
-        # "ON CONFLICT" requires postgres 9.5+
-        set_statement = ', '.join('%s=EXCLUDED.%s ' % (col, col)
-                                  for col in self.columnnames)
-        upsert_statement = (
-            'INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (_id) DO UPDATE'
-            ' SET %s' % (
-                self.tablename,
-                ','.join(self.columnnames),
-                ','.join(['?' for _ in self.columnnames]),
-                set_statement))
-
-        self.cursor.execute(
-            upsert_statement,
-            tuple([doc.get(key, None) for key in self.columnnames]))
 
     def get_docs_since(self, the_seq: int, num: int) \
             -> Tuple[int, Sequence[Document]]:
@@ -563,28 +564,6 @@ class PostgresDatastore(DatabaseDatastore):
             if doc.get(_DELETED, False) and not include_deleted:
                 doc = None
         return doc
-
-    def _put(self, doc: Document) -> None:
-        """Put doc under docid.
-
-        If no seq, give it one.
-        """
-        assert _REV in doc
-
-        # "ON CONFLICT" requires postgres 9.5+
-        set_statement = ', '.join('%s=EXCLUDED.%s ' % (col, col)
-                                  for col in self.columnnames)
-        upsert_statement = (
-            'INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (_id) DO UPDATE'
-            ' SET %s' % (
-                self.tablename,
-                ','.join(self.columnnames),
-                ','.join([r'%s' for _ in self.columnnames]),
-                set_statement))
-
-        self.cursor.execute(
-            upsert_statement,
-            tuple([doc.get(key, None) for key in self.columnnames]))
 
     def get_docs_since(self, the_seq: int, num: int) \
             -> Tuple[int, Sequence[Document]]:

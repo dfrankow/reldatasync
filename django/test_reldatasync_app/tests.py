@@ -6,6 +6,7 @@ from reldatasync import util
 from reldatasync.datastore import MemoryDatastore
 from reldatasync.json import JsonEncoder, JsonDecoder
 from reldatasync.replicator import Replicator
+from reldatasync.schema import Schema
 from reldatasync.vectorclock import VectorClock
 
 from reldatasync_app.models import SyncableModel
@@ -194,7 +195,7 @@ class PatientTest(TestCase):
                 self.assertEqual(pat, pat2)
 
             # decoding with schema works
-            schema = {
+            schema = Schema({
                 '_id': 'TEXT',
                 '_seq': 'INTEGER',
                 '_rev': 'TEXT',
@@ -206,6 +207,6 @@ class PatientTest(TestCase):
                 'created_dt': 'DATETIME',
                 'email': 'TEXT',
                 'org_id': 'TEXT',
-            }
+            })
             pat2 = JsonDecoder(schema=schema).decode(pat_str)
             self.assertEqual(pat, pat2)
