@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 
+from reldatasync_app import rest_api
 from reldatasync_app.models import SyncableModel
 
 
@@ -25,3 +26,8 @@ class Patient(SyncableModel):
 
     class DatastoreMeta:
         datastore_name = 'reldatasync_project_server'
+
+
+# Register datastores with the API
+rest_api.add_datastore_class('organization', Organization)
+rest_api.add_datastore_class('patient', Patient)

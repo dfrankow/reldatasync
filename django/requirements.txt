@@ -4,13 +4,70 @@
 #
 #    pip-compile
 #
+-e git+https://github.com/dfrankow/reldatasync@v0.0.3#subdirectory=python&egg=reldatasync
+    # via -r requirements.in
 asgiref==3.7.2
     # via django
+certifi==2021.10.8
+    # via
+    #   reldatasync
+    #   requests
+charset-normalizer==2.0.9
+    # via
+    #   reldatasync
+    #   requests
+click==8.0.3
+    # via
+    #   flask
+    #   reldatasync
 dj-database-url==0.5.0
     # via -r requirements.in
 django==4.2.3
+    # via
+    #   -r requirements.in
+    #   django-debug-toolbar
+    #   djangorestframework
+django-debug-toolbar==4.1.0
     # via -r requirements.in
+djangorestframework==3.14.0
+    # via -r requirements.in
+flask==2.0.2
+    # via reldatasync
+idna==3.3
+    # via
+    #   reldatasync
+    #   requests
+itsdangerous==2.0.1
+    # via
+    #   flask
+    #   reldatasync
+jinja2==3.0.3
+    # via
+    #   flask
+    #   reldatasync
+markupsafe==2.0.1
+    # via
+    #   jinja2
+    #   reldatasync
+psycopg2-binary==2.9.3
+    # via
+    #   -r requirements.in
+    #   reldatasync
+pytz==2023.3
+    # via djangorestframework
+requests==2.26.0
+    # via reldatasync
 sqlparse==0.4.4
-    # via django
+    # via
+    #   django
+    #   django-debug-toolbar
 typing-extensions==4.7.1
     # via asgiref
+urllib3==1.26.7
+    # via
+    #   reldatasync
+    #   requests
+werkzeug==2.0.2
+    # via
+    #   flask
+    #   reldatasync

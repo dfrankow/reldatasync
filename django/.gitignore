@@ -11,3 +11,6 @@ dist/
 
 # Download directory for setuptools
 .eggs/
+
+# Download directory for source-based pip installs
+src/
