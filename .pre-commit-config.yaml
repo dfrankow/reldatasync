@@ -3,7 +3,7 @@
 # Run 'pre-commit install' to install the pre-commit hooks
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.1.0
+    rev: v4.4.0
     hooks:
     - id: check-added-large-files
     - id: check-ast
@@ -18,21 +18,23 @@ repos:
     - id: mixed-line-ending
     - id: trailing-whitespace
 
--   repo: https://gitlab.com/pycqa/flake8
-    rev: 3.9.2
-    hooks:
-    - id: flake8
-      additional_dependencies:
-        - flake8-bugbear
+# flake8 after black, so black can fix formatting first
+- repo: https://github.com/pycqa/flake8
+  rev: 6.0.0
+  hooks:
+  - id: flake8
+    exclude: migrations/
+    additional_dependencies:
+      - flake8-bugbear
 
 - repo: https://github.com/adrienverge/yamllint.git
-  rev: v1.26.3
+  rev: v1.32.0
   hooks:
     - id: yamllint
       args: ['-c.yamllint-config.yml', '-s']
 
 - repo: https://github.com/Lucas-C/pre-commit-hooks
-  rev: v1.1.10
+  rev: v1.5.1
   hooks:
   - id: forbid-crlf
     exclude: (gradlew.bat)
