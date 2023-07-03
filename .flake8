@@ -1,3 +1,7 @@
 [flake8]
 exclude=**/migrations/*.py
-max-line-length=80
+
+# "minimal, black-compatible flake8 configuration"
+# see https://black.readthedocs.io/en/stable/the_black_code_style/current_style.html#line-length
+max-line-length = 88
+extend-ignore = E203
