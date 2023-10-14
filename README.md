@@ -28,6 +28,15 @@ Subdirectories:
 - java/android - Code suitable for android
 
 
+Dependencies
+------------
+
+I don't know a whole lot about how to make good dependencies for a
+library.  However, I am going to try using the pip ~= operator, which
+allows some small flexibility.  See also
+[here](https://stackoverflow.com/questions/39590187/in-requirements-txt-what-does-tilde-equals-mean).
+
+
 Related efforts
 ---------------
 
