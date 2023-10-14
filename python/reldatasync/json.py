@@ -6,7 +6,7 @@ We use JSON, but have to augment it with date and datetime functionality.
 The encoding can use python types, but the decoding depends on the datastore.
 """
 import json
-from datetime import datetime, date
+from datetime import date, datetime
 
 from reldatasync.document import Document
 
@@ -24,7 +24,7 @@ def _json_serial(obj):
         # Example of naive datetime format: 2021-12-30T17:07:27.918653
         # Example of date format: 2021-12-30
         return obj.isoformat()
-    raise TypeError('Type %s not serializable' % type(obj))
+    raise TypeError("Type %s not serializable" % type(obj))
 
 
 class JsonEncoder:
@@ -51,14 +51,13 @@ class JsonDecoder:
             for key, val in doc.items():
                 key_type = self.schema.field_type(key)
 
-                if key_type == 'DATETIME':
+                if key_type == "DATETIME":
                     doc[key] = datetime.fromisoformat(val)
-                elif key_type == 'DATE':
+                elif key_type == "DATE":
                     doc[key] = datetime.fromisoformat(val).date()
-                elif key_type in ('INTEGER', 'REAL', 'TEXT', 'BOOLEAN'):
+                elif key_type in ("INTEGER", "REAL", "TEXT", "BOOLEAN"):
                     # For now, the only types we parse are DATE and DATETIME
                     pass
                 else:
-                    raise ValueError(
-                        "Unknown schema type for {key}: '{key_type}'")
+                    raise ValueError("Unknown schema type for {key}: '{key_type}'")
         return doc

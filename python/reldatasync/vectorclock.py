@@ -126,12 +126,13 @@ class VectorClock:
             # Sorting is not needed, but let's be easy on the eyes
             sort_keys=True,
             # No whitespace: https://stackoverflow.com/a/16311587
-            separators=(',', ':'))
+            separators=(",", ":"),
+        )
 
     def __repr__(self) -> str:
-        return f'VectorClock({self.clocks})'
+        return f"VectorClock({self.clocks})"
 
     @staticmethod
-    def from_string(string) -> 'VectorClock':
+    def from_string(string) -> "VectorClock":
         # NOTE: check this is a valid string?
         return VectorClock(json.loads(string))
