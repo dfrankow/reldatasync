@@ -1,19 +1,18 @@
-from django.db import models, connections
-
+from django.db import connections, models
 from reldatasync.datastore import PostgresDatastore
 from reldatasync.util import uuid4_string
 
 
 class DataSyncRevisions(models.Model):
     """Table needed by PostgresDatastore"""
+
     # NOTE: default is set by python library during init
-    datastore_id = models.CharField(
-        unique=True, primary_key=True, max_length=100)
+    datastore_id = models.CharField(unique=True, primary_key=True, max_length=100)
     datastore_name = models.CharField(max_length=100, unique=True)
     sequence_id = models.IntegerField()
 
     class Meta:
-        db_table = 'data_sync_revisions'
+        db_table = "data_sync_revisions"
 
 
 class SyncableModel(models.Model):
@@ -21,8 +20,8 @@ class SyncableModel(models.Model):
 
     # fields needed for PostgresDatastore: _id, _rev, _deleted
     _id = models.CharField(
-        unique=True, primary_key=True, max_length=32,
-        default=uuid4_string)
+        unique=True, primary_key=True, max_length=32, default=uuid4_string
+    )
     _rev = models.CharField(max_length=REV_LENGTH)
     _seq = models.IntegerField()
     _deleted = models.BooleanField()
@@ -31,7 +30,7 @@ class SyncableModel(models.Model):
     def get_datastore_by_name(datastore_name, db_table, conn=None):
         """Get Datastore given its name and db_table."""
         if not conn:
-            conn = connections['default']
+            conn = connections["default"]
 
         # get id for name if it exists
         ds_id = None
@@ -42,19 +41,14 @@ class SyncableModel(models.Model):
             # that's okay
             pass
 
-        return PostgresDatastore(
-            datastore_name,
-            conn,
-            db_table,
-            datastore_id=ds_id)
+        return PostgresDatastore(datastore_name, conn, db_table, datastore_id=ds_id)
 
     @classmethod
     def _get_datastore(cls, conn=None):
         """Get Datastore for this class."""
         return SyncableModel.get_datastore_by_name(
-            cls.DatastoreMeta.datastore_name,
-            cls._meta.db_table,
-            conn)
+            cls.DatastoreMeta.datastore_name, cls._meta.db_table, conn
+        )
 
     def _assign_rev_and_seq(self):
         """Assign self._rev and self._seq with appropriate values"""
@@ -62,7 +56,8 @@ class SyncableModel(models.Model):
             self._rev, self._seq = pd.new_rev_and_seq(self._rev)
             if len(self._rev) > SyncableModel.REV_LENGTH:
                 raise ValueError(
-                    f'_rev is limited to {SyncableModel.REV_LENGTH} characters')
+                    f"_rev is limited to {SyncableModel.REV_LENGTH} characters"
+                )
 
     def save(self, *args, **kwargs):
         """save() that sets _rev, _seq, and _deleted properly"""

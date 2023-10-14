@@ -2,16 +2,19 @@ import logging
 import os
 import random
 import sqlite3
+import unittest
 from abc import abstractmethod
 from unittest import SkipTest
 
 import psycopg2
-import unittest
-
 from reldatasync import util
 from reldatasync.datastore import (
-    MemoryDatastore, PostgresDatastore, Datastore, SqliteDatastore)
-from reldatasync.document import Document, _REV, _ID, _SEQ, _DELETED
+    Datastore,
+    MemoryDatastore,
+    PostgresDatastore,
+    SqliteDatastore,
+)
+from reldatasync.document import _DELETED, _ID, _REV, _SEQ, Document
 from reldatasync.replicator import Replicator
 from reldatasync.vectorclock import VectorClock
 
@@ -32,7 +35,7 @@ class _TestDatastore(unittest.TestCase):
         if self.__class__ == _TestDatastore:
             # Skipping here allows us to derive _TestDatastore from TestCase
             # See also https://stackoverflow.com/a/35304339
-            self.skipTest('Skip base class test (_TestDatastore)')
+            self.skipTest("Skip base class test (_TestDatastore)")
 
     def assert_equals_no_seq(self, ds1, ds2):
         self.assertTrue(ds1.equals_no_seq(ds2))
@@ -45,101 +48,119 @@ class _TestDatastore(unittest.TestCase):
 
     def _get_datastore(self, ds, table):
         if self.server.__class__ == MemoryDatastore:
-            ds = MemoryDatastore('name')
+            ds = MemoryDatastore("name")
         elif self.server.__class__ == PostgresDatastore:
-            ds = PostgresDatastore(
-                'name', ds.conn if ds else None, table)
+            ds = PostgresDatastore("name", ds.conn if ds else None, table)
         elif self.server.__class__ == SqliteDatastore:
-            ds = SqliteDatastore(
-                'name', ds.conn if ds else None, table)
+            ds = SqliteDatastore("name", ds.conn if ds else None, table)
         return ds
 
     def test_datastore_id(self):
         # datastore without an id is assigned a random one
         ds = self._get_datastore(None, None)
         self.assertEqual(32, len(ds.id))
-        self.assertNotIn('-', ds.id)
+        self.assertNotIn("-", ds.id)
 
         # Don't check persistence of id (below) for MemoryDatastore
         if self.server.__class__ == MemoryDatastore:
             return
 
         # datastore id is assigned to a new datastore
-        ds = self._get_datastore(self.server, 'docs1')
+        ds = self._get_datastore(self.server, "docs1")
         # need to use 'with' to execute __enter__
         with ds:
             id1 = ds.id
             self.assertEqual(32, len(ds.id))
-            self.assertNotIn('-', ds.id)
+            self.assertNotIn("-", ds.id)
 
         # If we make a new datastore with same name,
         # it has the same id as before
-        ds = self._get_datastore(self.server, 'docs1')
+        ds = self._get_datastore(self.server, "docs1")
         with ds:
             self.assertEqual(id1, ds.id)
 
     def test_new_rev_and_seq(self):
-        rev = ''
+        rev = ""
         rev, seq = self.server.new_rev_and_seq(rev)
         self.assertEqual(1, seq)
-        self.assertEqual(str(VectorClock({'server_id': 1})), rev)
+        self.assertEqual(str(VectorClock({"server_id": 1})), rev)
 
         rev, seq = self.server.new_rev_and_seq(rev)
         self.assertEqual(2, seq)
-        self.assertEqual(str(VectorClock({'server_id': 2})), rev)
+        self.assertEqual(str(VectorClock({"server_id": 2})), rev)
 
     def test_nonoverlapping_sync(self):
         """Non-overlapping documents from datastore"""
         # server makes object A v1
-        self.server.put(
-            Document({_ID: 'A', 'value': 'val1'}), increment_rev=True)
+        self.server.put(Document({_ID: "A", "value": "val1"}), increment_rev=True)
         # client makes object B v1
-        self.client.put(
-            Document({_ID: 'B', 'value': 'val2'}), increment_rev=True)
+        self.client.put(Document({_ID: "B", "value": "val2"}), increment_rev=True)
 
         # sync leaves both server and client with A val1, B val2
         self.sync_and_check(self.client, self.server)
 
         # client
         self.assertEqual(
-            Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({self.server.id: 1})),
-                      # A got put in client after B
-                      _SEQ: 2}),
-            self.client.get('A'))
+            Document(
+                {
+                    _ID: "A",
+                    "value": "val1",
+                    _REV: str(VectorClock({self.server.id: 1})),
+                    # A got put in client after B
+                    _SEQ: 2,
+                }
+            ),
+            self.client.get("A"),
+        )
         self.assertEqual(
-            Document({_ID: 'B', 'value': 'val2',
-                      _REV: str(VectorClock({self.client.id: 1})),
-                      _SEQ: 1}),
-            self.client.get('B'))
+            Document(
+                {
+                    _ID: "B",
+                    "value": "val2",
+                    _REV: str(VectorClock({self.client.id: 1})),
+                    _SEQ: 1,
+                }
+            ),
+            self.client.get("B"),
+        )
 
         # server
         self.assertEqual(
-            Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({self.server.id: 1})),
-                      _SEQ: 1}),
-            self.server.get('A'))
+            Document(
+                {
+                    _ID: "A",
+                    "value": "val1",
+                    _REV: str(VectorClock({self.server.id: 1})),
+                    _SEQ: 1,
+                }
+            ),
+            self.server.get("A"),
+        )
         self.assertEqual(
-            Document({_ID: 'B', 'value': 'val2',
-                      _REV: str(VectorClock({self.client.id: 1})),
-                      # B got put in server after A
-                      _SEQ: 2}),
-            self.server.get('B'))
+            Document(
+                {
+                    _ID: "B",
+                    "value": "val2",
+                    _REV: str(VectorClock({self.client.id: 1})),
+                    # B got put in server after A
+                    _SEQ: 2,
+                }
+            ),
+            self.server.get("B"),
+        )
 
         # counter is at the highest existing doc version
         server_seq, server_docs = self.server.get_docs_since(0, 1000)
         self.assertEqual(self.server.sequence_id, server_seq)
-        self.assertEqual(self.server.sequence_id,
-                         max(doc[_SEQ] for doc in server_docs))
+        self.assertEqual(self.server.sequence_id, max(doc[_SEQ] for doc in server_docs))
 
         client_seq, client_docs = self.client.get_docs_since(0, 1000)
         self.assertEqual(self.client.sequence_id, client_seq)
-        self.assertEqual(self.client.sequence_id,
-                         max(doc[_SEQ] for doc in client_docs))
+        self.assertEqual(self.client.sequence_id, max(doc[_SEQ] for doc in client_docs))
 
     def test_put_if_needed(self):
         """put_if_needed doesn't put a second time"""
-        doc = Document({_ID: 'A', 'value': 'val1'})
+        doc = Document({_ID: "A", "value": "val1"})
         # put the doc
         num, doc = self.server.put(doc, increment_rev=True)
         self.assertEqual(1, num)
@@ -149,169 +170,230 @@ class _TestDatastore(unittest.TestCase):
         self.assertEqual(0, self.server.put(doc)[0])
 
         # doc is already present, but we said we changed it, so it's put
-        doc['value'] = 'val2'
+        doc["value"] = "val2"
         num, new_doc = self.server.put(doc, increment_rev=True)
         self.assertEqual(1, num)
-        self.assertEqual('val2', new_doc['value'])
-        self.assertEqual(self.server.get('A'), new_doc)
+        self.assertEqual("val2", new_doc["value"])
+        self.assertEqual(self.server.get("A"), new_doc)
 
     def test_overlapping_sync(self):
         """Overlapping documents from datastore"""
         # server makes object A v1
-        self.server.put(
-            Document({_ID: 'A', 'value': 'val1'}), increment_rev=True)
-        self.server.put(
-            Document({_ID: 'C', 'value': 'val3'}), increment_rev=True)
+        self.server.put(Document({_ID: "A", "value": "val1"}), increment_rev=True)
+        self.server.put(Document({_ID: "C", "value": "val3"}), increment_rev=True)
         # client makes object B v1
-        self.client.put(
-            Document({_ID: 'B', 'value': 'val2'}), increment_rev=True)
-        self.client.put(
-            Document({_ID: 'C', 'value': 'val4'}), increment_rev=True)
+        self.client.put(Document({_ID: "B", "value": "val2"}), increment_rev=True)
+        self.client.put(Document({_ID: "C", "value": "val4"}), increment_rev=True)
 
         # sync leaves both server and client with A val1,  B val2, C val4
         self.sync_and_check(self.client, self.server)
 
         # client
         self.assertEqual(
-            Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({self.server.id: 1})),
-                      _SEQ: 3}),
-            self.client.get('A'))
+            Document(
+                {
+                    _ID: "A",
+                    "value": "val1",
+                    _REV: str(VectorClock({self.server.id: 1})),
+                    _SEQ: 3,
+                }
+            ),
+            self.client.get("A"),
+        )
         self.assertEqual(
-            Document({_ID: 'B', 'value': 'val2',
-                      _REV: str(VectorClock({self.client.id: 1})),
-                      _SEQ: 1}),
-            self.client.get('B'))
+            Document(
+                {
+                    _ID: "B",
+                    "value": "val2",
+                    _REV: str(VectorClock({self.client.id: 1})),
+                    _SEQ: 1,
+                }
+            ),
+            self.client.get("B"),
+        )
         # server's C won
         self.assertEqual(
-            Document({_ID: 'C', 'value': 'val3',
-                      _REV: str(VectorClock({self.server.id: 2})),
-                      _SEQ: 4}),
-            self.client.get('C'))
+            Document(
+                {
+                    _ID: "C",
+                    "value": "val3",
+                    _REV: str(VectorClock({self.server.id: 2})),
+                    _SEQ: 4,
+                }
+            ),
+            self.client.get("C"),
+        )
 
         # server
         self.assertEqual(
-            Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({self.server.id: 1})),
-                      _SEQ: 1}),
-            self.server.get('A'))
+            Document(
+                {
+                    _ID: "A",
+                    "value": "val1",
+                    _REV: str(VectorClock({self.server.id: 1})),
+                    _SEQ: 1,
+                }
+            ),
+            self.server.get("A"),
+        )
         self.assertEqual(
-            Document({_ID: 'B', 'value': 'val2',
-                      _REV: str(VectorClock({self.client.id: 1})),
-                      _SEQ: 3}),
-            self.server.get('B'))
+            Document(
+                {
+                    _ID: "B",
+                    "value": "val2",
+                    _REV: str(VectorClock({self.client.id: 1})),
+                    _SEQ: 3,
+                }
+            ),
+            self.server.get("B"),
+        )
         # server's C won
         self.assertEqual(
-            Document({_ID: 'C', 'value': 'val3',
-                      _REV: str(VectorClock({self.server.id: 2})),
-                      # server ignored client, so _SEQ is still 2
-                      _SEQ: 2}),
-            self.server.get('C'))
+            Document(
+                {
+                    _ID: "C",
+                    "value": "val3",
+                    _REV: str(VectorClock({self.server.id: 2})),
+                    # server ignored client, so _SEQ is still 2
+                    _SEQ: 2,
+                }
+            ),
+            self.server.get("C"),
+        )
 
     def test_get_docs_since(self):
-        self.server.put(
-            Document({_ID: 'A', 'value': 'val1'}), increment_rev=True)
-        self.server.put(
-            Document({_ID: 'C', 'value': 'val3'}), increment_rev=True)
-        doca = self.server.get('A')
-        docc = self.server.get('C')
+        self.server.put(Document({_ID: "A", "value": "val1"}), increment_rev=True)
+        self.server.put(Document({_ID: "C", "value": "val3"}), increment_rev=True)
+        doca = self.server.get("A")
+        docc = self.server.get("C")
         # since 0 returns all the docs, in order
         current_seq = 2
-        self.assertEqual(
-            (current_seq, [doca, docc]),
-            self.server.get_docs_since(0, 10))
+        self.assertEqual((current_seq, [doca, docc]), self.server.get_docs_since(0, 10))
         # since 1 doesn't return doca
-        self.assertEqual(
-            (current_seq, [docc]),
-            self.server.get_docs_since(1, 10))
+        self.assertEqual((current_seq, [docc]), self.server.get_docs_since(1, 10))
 
         # get_docs_since returns deleted docs
-        self.server.delete('A')
-        doca = self.server.get('A', include_deleted=True)
+        self.server.delete("A")
+        doca = self.server.get("A", include_deleted=True)
         current_seq = 3
         docs = self.server.get_docs_since(0, 10)
         self.assertEqual(
             # order switched (docc first), since deleting A increased version
             (current_seq, [docc, doca]),
             docs,
-            docs)
+            docs,
+        )
 
     def test_delete_sync(self):
         """Test that deletes get through syncing"""
         # server makes object A v1
-        self.server.put(
-            Document({_ID: 'A', 'value': 'val1'}), increment_rev=True)
-        self.server.put(
-            Document({_ID: 'C', 'value': 'val3'}), increment_rev=True)
+        self.server.put(Document({_ID: "A", "value": "val1"}), increment_rev=True)
+        self.server.put(Document({_ID: "C", "value": "val3"}), increment_rev=True)
         # client makes object B v1
-        self.client.put(
-            Document({_ID: 'B', 'value': 'val2'}), increment_rev=True)
-        self.client.put(
-            Document({_ID: 'C', 'value': 'val4'}), increment_rev=True)
+        self.client.put(Document({_ID: "B", "value": "val2"}), increment_rev=True)
+        self.client.put(Document({_ID: "C", "value": "val4"}), increment_rev=True)
 
         # delete some
-        self.server.delete('A')
-        self.client.delete('C')
+        self.server.delete("A")
+        self.client.delete("C")
 
         # sync leaves both server and client with the same stuff
         self.sync_and_check(self.client, self.server)
 
         # client
         self.assertEqual(
-            Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({self.server.id: 3})),
-                      _SEQ: 4,
-                      _DELETED: True}),
-            self.client.get('A', include_deleted=True))
+            Document(
+                {
+                    _ID: "A",
+                    "value": "val1",
+                    _REV: str(VectorClock({self.server.id: 3})),
+                    _SEQ: 4,
+                    _DELETED: True,
+                }
+            ),
+            self.client.get("A", include_deleted=True),
+        )
         self.assertEqual(
-            Document({_ID: 'B', 'value': 'val2',
-                      _REV: str(VectorClock({self.client.id: 1})),
-                      _SEQ: 1}),
-            self.client.get('B'))
+            Document(
+                {
+                    _ID: "B",
+                    "value": "val2",
+                    _REV: str(VectorClock({self.client.id: 1})),
+                    _SEQ: 1,
+                }
+            ),
+            self.client.get("B"),
+        )
         self.assertEqual(
-            Document({_ID: 'C', 'value': 'val4',
-                      _REV: str(VectorClock({self.client.id: 3})),
-                      # client ignores server's change, so _SEQ is still 2
-                      _SEQ: 3,
-                      _DELETED: True}),
-            self.client.get('C', include_deleted=True))
+            Document(
+                {
+                    _ID: "C",
+                    "value": "val4",
+                    _REV: str(VectorClock({self.client.id: 3})),
+                    # client ignores server's change, so _SEQ is still 2
+                    _SEQ: 3,
+                    _DELETED: True,
+                }
+            ),
+            self.client.get("C", include_deleted=True),
+        )
 
         # server
         self.assertEqual(
-            Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({self.server.id: 3})),
-                      _SEQ: 3,
-                      _DELETED: True}),
-            self.server.get('A', include_deleted=True))
+            Document(
+                {
+                    _ID: "A",
+                    "value": "val1",
+                    _REV: str(VectorClock({self.server.id: 3})),
+                    _SEQ: 3,
+                    _DELETED: True,
+                }
+            ),
+            self.server.get("A", include_deleted=True),
+        )
         self.assertEqual(
-            Document({_ID: 'B', 'value': 'val2',
-                      _REV: str(VectorClock({self.client.id: 1})),
-                      _SEQ: 4}),
-            self.server.get('B'))
+            Document(
+                {
+                    _ID: "B",
+                    "value": "val2",
+                    _REV: str(VectorClock({self.client.id: 1})),
+                    _SEQ: 4,
+                }
+            ),
+            self.server.get("B"),
+        )
         self.assertEqual(
-            Document({_ID: 'C', 'value': 'val4',
-                      # server get's client's change
-                      _REV: str(VectorClock({self.client.id: 3})),
-                      _SEQ: 5,
-                      _DELETED: True}),
-            self.server.get('C', include_deleted=True))
+            Document(
+                {
+                    _ID: "C",
+                    "value": "val4",
+                    # server get's client's change
+                    _REV: str(VectorClock({self.client.id: 3})),
+                    _SEQ: 5,
+                    _DELETED: True,
+                }
+            ),
+            self.server.get("C", include_deleted=True),
+        )
 
     def test_delete_sync2(self):
         """Test a particular case that failed previously."""
 
         # Put items into server that will be ignored on client
         # a is in last, to have a higher sequence number than server will
-        for item_name in ['i1', 'a']:
+        for item_name in ["i1", "a"]:
             self.client.put(
-                Document({_ID: item_name, 'value': 820}), increment_rev=True)
+                Document({_ID: item_name, "value": 820}), increment_rev=True
+            )
             self.client.put(
-                Document({_ID: item_name, 'value': 716}), increment_rev=True)
+                Document({_ID: item_name, "value": 716}), increment_rev=True
+            )
 
         # sync leaves both server and client with a
         self.sync_and_check(self.client, self.server)
 
         # delete on server
-        self.server.delete('a')
+        self.server.delete("a")
 
         # sync leaves both server and client with deleted a
         self.sync_and_check(self.client, self.server)
@@ -321,79 +403,115 @@ class _TestDatastore(unittest.TestCase):
         # and A syncs with B, B with C, but A never syncs with C
         # we should still have all three servers agree
         # server makes object A v1
-        self.server.put(
-            Document({_ID: 'A', 'value': 'val1'}), increment_rev=True)
-        self.server.put(
-            Document({_ID: 'D', 'value': 'val3'}), increment_rev=True)
+        self.server.put(Document({_ID: "A", "value": "val1"}), increment_rev=True)
+        self.server.put(Document({_ID: "D", "value": "val3"}), increment_rev=True)
         # client makes object B v1
-        self.client.put(
-            Document({_ID: 'B', 'value': 'val2'}), increment_rev=True)
-        self.client.put(
-            Document({_ID: 'D', 'value': 'val4'}), increment_rev=True)
+        self.client.put(Document({_ID: "B", "value": "val2"}), increment_rev=True)
+        self.client.put(Document({_ID: "D", "value": "val4"}), increment_rev=True)
         # third makes object C v1
-        self.third.put(
-            Document({_ID: 'C', 'value': 'val3'}), increment_rev=True)
-        self.third.put(
-            Document({_ID: 'D', 'value': 'val5'}), increment_rev=True)
+        self.third.put(Document({_ID: "C", "value": "val3"}), increment_rev=True)
+        self.third.put(Document({_ID: "D", "value": "val5"}), increment_rev=True)
 
         # pull server <= client
-        logger.debug('*** pull server <= client')
+        logger.debug("*** pull server <= client")
         Replicator(self.server, self.client).pull_changes()
         # pull client <= third
-        logger.debug('*** pull client <= third')
+        logger.debug("*** pull client <= third")
         Replicator(self.client, self.third).pull_changes()
         # pull server <= client
-        logger.debug('*** pull server <= client')
+        logger.debug("*** pull server <= client")
         Replicator(self.server, self.client).pull_changes()
 
         # third only has C and D, since nothing pushed to it
         self.assertEqual(
-            Document({_ID: 'C', 'value': 'val3',
-                      _REV: str(VectorClock({self.third.id: 1})),
-                      _SEQ: 1}),
-            self.third.get('C'))
+            Document(
+                {
+                    _ID: "C",
+                    "value": "val3",
+                    _REV: str(VectorClock({self.third.id: 1})),
+                    _SEQ: 1,
+                }
+            ),
+            self.third.get("C"),
+        )
         self.assertEqual(
-            Document({_ID: 'D', 'value': 'val5',
-                      _REV: str(VectorClock({self.third.id: 2})),
-                      _SEQ: 2}),
-            self.third.get('D'))
+            Document(
+                {
+                    _ID: "D",
+                    "value": "val5",
+                    _REV: str(VectorClock({self.third.id: 2})),
+                    _SEQ: 2,
+                }
+            ),
+            self.third.get("D"),
+        )
 
         # now server has all of third's docs even though they never synced,
         # because server got third's changes through client
-        for item in ('A', 'B', 'C', 'D'):
+        for item in ("A", "B", "C", "D"):
             self.assertTrue(self.server.get(item))
 
         # server
         self.assertEqual(
-            Document({_ID: 'A', 'value': 'val1',
-                      _REV: str(VectorClock({self.server.id: 1})),
-                      _SEQ: 1}),
-            self.server.get('A'))
+            Document(
+                {
+                    _ID: "A",
+                    "value": "val1",
+                    _REV: str(VectorClock({self.server.id: 1})),
+                    _SEQ: 1,
+                }
+            ),
+            self.server.get("A"),
+        )
         self.assertEqual(
-            Document({_ID: 'B', 'value': 'val2',
-                      _REV: str(VectorClock({self.client.id: 1})),
-                      _SEQ: 3}),
-            self.server.get('B'))
+            Document(
+                {
+                    _ID: "B",
+                    "value": "val2",
+                    _REV: str(VectorClock({self.client.id: 1})),
+                    _SEQ: 3,
+                }
+            ),
+            self.server.get("B"),
+        )
         # This only succeeds if C traveled from third to client to server!
         self.assertEqual(
-            Document({_ID: 'C', 'value': 'val3',
-                      _REV: str(VectorClock({self.third.id: 1})),
-                      _SEQ: 4}),
-            self.server.get('C'))
+            Document(
+                {
+                    _ID: "C",
+                    "value": "val3",
+                    _REV: str(VectorClock({self.third.id: 1})),
+                    _SEQ: 4,
+                }
+            ),
+            self.server.get("C"),
+        )
         # server's D wins
         self.assertEqual(
-            Document({_ID: 'D', 'value': 'val3',
-                      _REV: str(VectorClock({self.server.id: 2})),
-                      # ignored third's D
-                      _SEQ: 2}),
-            self.server.get('D'))
+            Document(
+                {
+                    _ID: "D",
+                    "value": "val3",
+                    _REV: str(VectorClock({self.server.id: 2})),
+                    # ignored third's D
+                    _SEQ: 2,
+                }
+            ),
+            self.server.get("D"),
+        )
 
         # client also has C
         self.assertEqual(
-            Document({_ID: 'C', 'value': 'val3',
-                      _REV: str(VectorClock({self.third.id: 1})),
-                      _SEQ: 3}),
-            self.client.get('C'))
+            Document(
+                {
+                    _ID: "C",
+                    "value": "val3",
+                    _REV: str(VectorClock({self.third.id: 1})),
+                    _SEQ: 3,
+                }
+            ),
+            self.client.get("C"),
+        )
 
     @staticmethod
     def _some_datastore_mods(datastore, items):
@@ -405,11 +523,10 @@ class _TestDatastore(unittest.TestCase):
                 datastore.delete(item)
             else:
                 val = random.randint(0, 1000)
-                datastore.put(
-                    Document({_ID: item, 'value': val}), increment_rev=True)
+                datastore.put(Document({_ID: item, "value": val}), increment_rev=True)
 
     def test_long_streaks(self):
-        items = [f'item{num}' for num in range(100)]
+        items = [f"item{num}" for num in range(100)]
 
         for _ in range(16):
             # some mods for server, client, third
@@ -420,14 +537,19 @@ class _TestDatastore(unittest.TestCase):
                 _TestDatastore._some_datastore_mods(ds, items)
 
             # sync in pairwise steps between the three datastores
-            all_pairs = [[self.client, self.server],
-                         [self.client, self.third],
-                         [self.server, self.third]]
+            all_pairs = [
+                [self.client, self.server],
+                [self.client, self.third],
+                [self.server, self.third],
+            ]
             random.shuffle(all_pairs)
             for pair in all_pairs:
-                Replicator(pair[0], pair[1],
-                           # use small chunk size to test multiple chunks
-                           chunk_size=2).sync_both_directions()
+                Replicator(
+                    pair[0],
+                    pair[1],
+                    # use small chunk size to test multiple chunks
+                    chunk_size=2,
+                ).sync_both_directions()
 
             # server and client should now contain the same stuff
             self.assert_equals_no_seq(self.client, self.server)
@@ -438,35 +560,35 @@ class _TestDatastore(unittest.TestCase):
             self.assertTrue(self.third.check())
 
     def test_copy(self):
-        doc = Document({_ID: 'A', 'value': 'val1'})
+        doc = Document({_ID: "A", "value": "val1"})
         self.server.put(doc, increment_rev=True)
-        doc['another'] = 'foo'
-        doc2 = self.server.get('A')
-        self.assertTrue('another' not in doc2)
-        self.assertTrue('another' in doc)
+        doc["another"] = "foo"
+        doc2 = self.server.get("A")
+        self.assertTrue("another" not in doc2)
+        self.assertTrue("another" in doc)
 
     def test_delete(self):
-        doc = Document({_ID: 'A', 'value': 'val1'})
+        doc = Document({_ID: "A", "value": "val1"})
         self.server.put(doc, increment_rev=True)
-        doc1 = self.server.get('A')
+        doc1 = self.server.get("A")
         self.assertTrue(doc1)
-        self.server.delete('A')
+        self.server.delete("A")
 
         # get doesn't return deleted doc by default
-        self.assertIsNone(self.server.get('A'))
+        self.assertIsNone(self.server.get("A"))
 
         # get returns deleted doc if asked
-        doc2 = self.server.get('A', include_deleted=True)
-        self.assertEqual(True, doc2['_deleted'])
+        doc2 = self.server.get("A", include_deleted=True)
+        self.assertEqual(True, doc2["_deleted"])
         self.assertGreater(doc2[_REV], doc1[_REV])
 
 
 class TestMemoryDatastore(_TestDatastore):
     def setUp(self):
         super().setUp()
-        self.server = MemoryDatastore('server', 'server_id')
-        self.client = MemoryDatastore('client', 'client_id')
-        self.third = MemoryDatastore('third', 'third_id')
+        self.server = MemoryDatastore("server", "server_id")
+        self.client = MemoryDatastore("client", "client_id")
+        self.third = MemoryDatastore("third", "third_id")
 
 
 class _TestDatabase:
@@ -496,17 +618,18 @@ class _TestDatabase:
 
     def _create_table_if_not_exists(self, tablename: str, definition: str):
         def exec_func(curs):
-            curs.execute('CREATE TABLE IF NOT EXISTS %s (%s)'
-                         % (tablename, definition))
+            curs.execute(f"CREATE TABLE IF NOT EXISTS {tablename} ({definition})")
+
         self.exec_sql(exec_func, dbname=self.dbname)
 
     def _create_test_tables(self):
         def exec_func(_curs):
             self._create_table_if_not_exists(
-                'data_sync_revisions',
-                'datastore_id varchar(100) not null,'
-                'datastore_name varchar(1000) not null,'
-                ' sequence_id int not null')
+                "data_sync_revisions",
+                "datastore_id varchar(100) not null,"
+                "datastore_name varchar(1000) not null,"
+                " sequence_id int not null",
+            )
             # docs1 only needed on server, and docs2 on client
             # but it's easier to just create both tables on both
             docs_def = """
@@ -516,20 +639,21 @@ class _TestDatabase:
                 _deleted bool,
                 value text
             """
-            self._create_table_if_not_exists('docs1', docs_def)
-            self._create_table_if_not_exists('docs2', docs_def)
+            self._create_table_if_not_exists("docs1", docs_def)
+            self._create_table_if_not_exists("docs2", docs_def)
+
         self.exec_sql(exec_func, dbname=self.dbname)
 
     def clear_and_reset_tables(self):
-        logger.debug(f'clear_and_reset_tables {self.dbname}')
+        logger.debug(f"clear_and_reset_tables {self.dbname}")
 
         def exec_func(curs):
             # reset sequence_id so tests start from 0
             # this breaks the abstraction barrier, but means the datastore
             # classes don't have to do twisted things just for testing
-            curs.execute('UPDATE data_sync_revisions SET sequence_id = 0')
-            curs.execute('DELETE FROM docs1')
-            curs.execute('DELETE FROM docs2')
+            curs.execute("UPDATE data_sync_revisions SET sequence_id = 0")
+            curs.execute("DELETE FROM docs1")
+            curs.execute("DELETE FROM docs2")
 
         self.exec_sql(exec_func, dbname=self.dbname)
 
@@ -546,14 +670,15 @@ class _SqliteTestDatabase(_TestDatabase):
     # TODO: factor out connect
     def connect(self, table, datastore_id=None):
         if datastore_id is None:
-            datastore_id = self.dbname + '_id'
+            datastore_id = self.dbname + "_id"
         self._conn = sqlite3.connect(
             self.dbname,
             # Use autocommit to not need transactions:
-            isolation_level=None)
+            isolation_level=None,
+        )
         self.datastore = SqliteDatastore(
-            self.dsname, self._conn, table,
-            datastore_id=datastore_id)
+            self.dsname, self._conn, table, datastore_id=datastore_id
+        )
         self.datastore.__enter__()
 
     def create_test_db_and_tables(self):
@@ -571,7 +696,7 @@ class _SqliteTestDatabase(_TestDatabase):
         cursor = None
         try:
             conn = sqlite3.connect(self.dbname)
-            logger.debug(f'Connect 1 {self.dbname}')
+            logger.debug(f"Connect 1 {self.dbname}")
             cursor = conn.cursor()
             exec_func(cursor)
         finally:
@@ -579,7 +704,7 @@ class _SqliteTestDatabase(_TestDatabase):
                 cursor.close()
             if conn:
                 conn.close()
-                logger.debug(f'Closed conn 1 {self.dbname}')
+                logger.debug(f"Closed conn 1 {self.dbname}")
 
     def drop_db(self):
         # remove the sqlite file
@@ -590,13 +715,13 @@ class _PostgresTestDatabase(_TestDatabase):
     # TODO: factor out connect
     def connect(self, table, datastore_id=None):
         if datastore_id is None:
-            datastore_id = self.dbname + '_id'
+            datastore_id = self.dbname + "_id"
         self._conn = psycopg2.connect(self._dbconnstr(self.dbname))
         # If we want to test with autocommit:
         # self._conn.autocommit = True
         self.datastore = PostgresDatastore(
-            self.dsname, self._conn, table,
-            datastore_id=datastore_id)
+            self.dsname, self._conn, table, datastore_id=datastore_id
+        )
         self.datastore.__enter__()
 
     @staticmethod
@@ -606,14 +731,14 @@ class _PostgresTestDatabase(_TestDatabase):
         You can change host and server with environment variables POSTGRES_HOST
         and POSTGRES_SERVER.
         """
-        host = os.getenv('POSTGRES_HOST', 'localhost')
-        user = os.getenv('POSTGRES_USER', 'postgres')
-        password = os.getenv('POSTGRES_PASSWORD', None)
-        the_str = f'host={host} user={user}'
+        host = os.getenv("POSTGRES_HOST", "localhost")
+        user = os.getenv("POSTGRES_USER", "postgres")
+        password = os.getenv("POSTGRES_PASSWORD", None)
+        the_str = f"host={host} user={user}"
         if dbname:
-            the_str += f' dbname={dbname}'
+            the_str += f" dbname={dbname}"
         if password:
-            the_str += f' password={password}'
+            the_str += f" password={password}"
         return the_str
 
     def exec_sql(self, exec_func, dbname=None, autocommit=True):
@@ -631,29 +756,29 @@ class _PostgresTestDatabase(_TestDatabase):
         ret = None
         try:
             conn = psycopg2.connect(connstr)
-            logger.debug(f'Connect 1 {connstr}')
+            logger.debug(f"Connect 1 {connstr}")
             if autocommit:
-                conn.set_isolation_level(
-                    psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+                conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
             with conn.cursor() as cursor:
                 ret = exec_func(cursor)
         finally:
             if conn:
                 conn.close()
-                logger.debug(f'Closed conn 1 {connstr}')
+                logger.debug(f"Closed conn 1 {connstr}")
         return ret
 
     def drop_db(self):
-        self.exec_sql(
-            lambda curs: curs.execute('DROP DATABASE %s' % self.dbname))
+        self.exec_sql(lambda curs: curs.execute("DROP DATABASE %s" % self.dbname))
 
     def _database_exists(self, database_name):
         def exec_func(curs):
             curs.execute(
-                'SELECT datname FROM pg_catalog.pg_database WHERE datname = %s',
-                (database_name,))
+                "SELECT datname FROM pg_catalog.pg_database WHERE datname = %s",
+                (database_name,),
+            )
 
             return bool(curs.fetchone())
+
         return self.exec_sql(exec_func, dbname=None, autocommit=True)
 
     def create_test_db_and_tables(self):
@@ -663,23 +788,24 @@ class _PostgresTestDatabase(_TestDatabase):
     def _create_test_db(self):
         def exec_func(curs):
             if not self._database_exists(self.dbname):
-                curs.execute('CREATE DATABASE %s' % self.dbname)
+                curs.execute("CREATE DATABASE %s" % self.dbname)
             else:
-                logger.info('database %s already exists' % self.dbname)
+                logger.info("database %s already exists" % self.dbname)
+
         self.exec_sql(exec_func, dbname=None, autocommit=True)
 
 
 class _TestDatabases:
     def __init__(self, testdbclass):
         # dbname is the database in which the datastore will live
-        self.server_dbname = 'server'
-        self.client_dbname = 'client'
-        self.third_dbname = 'third'
+        self.server_dbname = "server"
+        self.client_dbname = "client"
+        self.third_dbname = "third"
 
         # dsname is the name of the datastore, no matter where it lives
-        self.server_dsname = 'server'
-        self.client_dsname = 'client'
-        self.third_dsname = 'third'
+        self.server_dsname = "server"
+        self.client_dsname = "client"
+        self.third_dsname = "third"
 
         # SAME_DB: if True, put server/client tables in one DB;
         # else put one table in two DBs.
@@ -700,19 +826,20 @@ class _TestDatabases:
         self.third = None
 
     def init_dbclass(self):
-        logger.debug('Set up server, client, third')
+        logger.debug("Set up server, client, third")
         self.serverdb = self.testdbclass(self.server_dbname, self.server_dsname)
         self.clientdb = self.testdbclass(self.client_dbname, self.client_dsname)
         self.thirddb = self.testdbclass(self.third_dbname, self.third_dsname)
 
     def connect(self):
-        self.serverdb.connect('docs1')
+        self.serverdb.connect("docs1")
         self.clientdb.connect(
-            'docs2',
+            "docs2",
             # Even if client is connected to serverdb,
             # it's a different datastore
-            datastore_id='client_id')
-        self.thirddb.connect('docs1')
+            datastore_id="client_id",
+        )
+        self.thirddb.connect("docs1")
 
         self.server = self.serverdb.datastore
         self.client = self.clientdb.datastore
@@ -743,7 +870,7 @@ class _TestDatabases:
 
     def close_connections(self):
         """Close connections"""
-        logger.debug('Exit server, client, third')
+        logger.debug("Exit server, client, third")
         if self.server:
             # This __exit__ will be called by the close() below?
             # self.server.__exit__()
@@ -755,8 +882,8 @@ class _TestDatabases:
             # self.third.__exit__()
             self.third = None
 
-        logger.debug('Set serverdb, clientdb, thirddb to None')
-        for db_name in ['serverdb', 'clientdb', 'thirddb']:
+        logger.debug("Set serverdb, clientdb, thirddb to None")
+        for db_name in ["serverdb", "clientdb", "thirddb"]:
             db = getattr(self, db_name)
             if db:
                 db.close()
@@ -774,7 +901,7 @@ class _TestDatabaseDatastore(_TestDatastore):
         if cls == _TestDatabaseDatastore:
             # Skipping here allows us to derive from _TestDatabaseDatastore
             # See also https://stackoverflow.com/a/35304339
-            raise SkipTest('Skip base class test (_TestDatabaseDatastore)')
+            raise SkipTest("Skip base class test (_TestDatabaseDatastore)")
 
         super().setUpClass()
         assert cls._testdbs is None

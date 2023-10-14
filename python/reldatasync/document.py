@@ -1,20 +1,20 @@
-from typing import TypeVar, Set
+from typing import TypeVar
 
 # _REV is a vector clock of revisions from every process that changed the doc
-_REV = '_rev'
+_REV = "_rev"
 # _SEQ is a sequence number local to a datastore that says when it was inserted
-_SEQ = '_seq'
+_SEQ = "_seq"
 # _ID is a globally unique identifier
-_ID = '_id'
+_ID = "_id"
 # _DELETED is True if the doc has been deleted
-_DELETED = '_deleted'
+_DELETED = "_deleted"
 
-ID_TYPE = TypeVar('ID_TYPE')
+ID_TYPE = TypeVar("ID_TYPE")
 
 
 class Document(dict):
     def __init__(self, *arg, **kw):
-        super(Document, self).__init__(*arg, **kw)
+        super().__init__(*arg, **kw)
         assert _ID in self
 
     @staticmethod
@@ -33,7 +33,7 @@ class Document(dict):
         else:
             return 0
 
-    def compare(self, other: 'Document', ignore_keys: Set[str] = None) -> int:
+    def compare(self, other: "Document", ignore_keys: set[str] = None) -> int:
         """Return -1 if self < other, 0 if equal, 1 if self > other or other is None.
 
         Compare keys and values.
@@ -65,8 +65,7 @@ class Document(dict):
 
             # keys were all the same, now compare values
             for idx in range(len(keys)):
-                valcmp = Document._compare_vals(
-                    self[keys[idx]], other[other_keys[idx]])
+                valcmp = Document._compare_vals(self[keys[idx]], other[other_keys[idx]])
                 if valcmp != 0:
                     return valcmp
 
@@ -91,5 +90,5 @@ class Document(dict):
     def __ge__(self, other):
         return self.compare(other) != -1
 
-    def copy(self) -> 'Document':
+    def copy(self) -> "Document":
         return Document(super().copy())

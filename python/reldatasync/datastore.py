@@ -1,16 +1,15 @@
 """An abstraction of a datastore, to use for syncing."""
 import functools
+import logging
 import sqlite3
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-import logging
-
-from typing import Sequence, Generic, Tuple
+from collections.abc import Sequence
+from typing import Generic
 
 import requests
-
 from reldatasync import util
-from reldatasync.document import Document, _REV, _ID, _DELETED, ID_TYPE, _SEQ
+from reldatasync.document import _DELETED, _ID, _REV, _SEQ, ID_TYPE, Document
 from reldatasync.vectorclock import VectorClock
 
 logger = logging.getLogger(__name__)
@@ -51,41 +50,39 @@ class Datastore(Generic[ID_TYPE], ABC):
         max_seq, docs = self.get_docs_since(0, max_size)
         doc_max_seq = 0
         for doc in docs:
-            docid = doc.get(_ID, '?')
+            docid = doc.get(_ID, "?")
 
             # check uniqueness of docid
             if docid in all_docids:
-                logger.warning(f'docid {docid} has repeated id')
+                logger.warning(f"docid {docid} has repeated id")
             all_docids.add(docid)
 
             # check docs have _ID, _REV, _SEQ
             for field in [_ID, _REV, _SEQ]:
                 if field not in doc:
-                    logger.warning(
-                        f'doc {docid} has no {field}')
+                    logger.warning(f"doc {docid} has no {field}")
                     ret = False
 
             # check doc _SEQ
             seq = doc.get(_SEQ, None)
             if seq in all_seqs:
-                logger.warning(f'docid {docid} has repeated seq {seq}')
+                logger.warning(f"docid {docid} has repeated seq {seq}")
             all_seqs.add(seq)
 
             if seq > doc_max_seq:
                 doc_max_seq = seq
 
             if not (0 < doc[_SEQ] <= max_seq):
-                logger.warning(f'doc {docid} has seq out of bounds {seq}')
+                logger.warning(f"doc {docid} has seq out of bounds {seq}")
                 ret = False
 
         if max_seq != doc_max_seq:
-            logger.warning(
-                f'doc_max_seq {doc_max_seq} max_seq reported {max_seq}')
+            logger.warning(f"doc_max_seq {doc_max_seq} max_seq reported {max_seq}")
             ret = False
 
         return ret
 
-    def equals_no_seq(self, other: 'Datastore', max_docs: int = 1000):
+    def equals_no_seq(self, other: "Datastore", max_docs: int = 1000):
         """True if two datastores have the same docs, ignoring the _SEQ key.
 
         _SEQ is local to a datastore, it can differ due to 'last write wins'.
@@ -96,8 +93,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         _, docs2 = other.get_docs_since(0, max_docs)
 
         if len(docs1) != len(docs2):
-            logger.debug(
-                f'len(docs1) = {len(docs1)} != len(docs2) = {len(docs2)}')
+            logger.debug(f"len(docs1) = {len(docs1)} != len(docs2) = {len(docs2)}")
             return False
 
         def compare_no_seq(a, b):
@@ -107,15 +103,18 @@ class Datastore(Generic[ID_TYPE], ABC):
         docs2 = sorted(docs2, key=functools.cmp_to_key(compare_no_seq))
         # debug logging:
         for idx in range(len(docs1)):
-            logger.debug(f'{self.id} docs[{idx}]={docs1[idx]}\n'
-                         f'{other.id} docs[{idx}]={docs2[idx]}\n')
+            logger.debug(
+                f"{self.id} docs[{idx}]={docs1[idx]}\n"
+                f"{other.id} docs[{idx}]={docs2[idx]}\n"
+            )
 
         for idx in range(len(docs1)):
             if docs1[idx].compare(docs2[idx], ignore_keys={_SEQ}) != 0:
                 logger.debug(
-                    'First unequal element: '
-                    f'{self.id} docs[{idx}]={docs1[idx]}\n'
-                    f'{other.id} docs[{idx}]={docs2[idx]}')
+                    "First unequal element: "
+                    f"{self.id} docs[{idx}]={docs1[idx]}\n"
+                    f"{other.id} docs[{idx}]={docs2[idx]}"
+                )
                 return False
 
         return True
@@ -123,15 +122,17 @@ class Datastore(Generic[ID_TYPE], ABC):
     def _increment_sequence_id(self) -> int:
         self._sequence_id += 1
         logger.debug(
-            f'{self.id}: Increment {self.id}'
-            f' _sequence_id to {self._sequence_id}')
+            f"{self.id}: Increment {self.id}" f" _sequence_id to {self._sequence_id}"
+        )
         return self._sequence_id
 
     def _set_sequence_id(self, the_id) -> None:
         """Set sequence id to the_id."""
         if the_id < self._sequence_id:
-            raise ValueError(f'Setting sequence_id backwards,'
-                             f' from {self._sequence_id} to {the_id}')
+            raise ValueError(
+                f"Setting sequence_id backwards,"
+                f" from {self._sequence_id} to {the_id}"
+            )
         self._sequence_id = the_id
 
     @property
@@ -141,7 +142,7 @@ class Datastore(Generic[ID_TYPE], ABC):
 
     def _set_new_rev(self, doc: Document, seq_id: int) -> None:
         """Set increment_rev revision for a doc."""
-        rev = VectorClock.from_string(doc.get(_REV, '{}'))
+        rev = VectorClock.from_string(doc.get(_REV, "{}"))
         rev.set_clock(self.id, seq_id)
         doc[_REV] = str(rev)
 
@@ -150,7 +151,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         seq_id = self._increment_sequence_id()
 
         if not rev_str:
-            rev_str = '{}'
+            rev_str = "{}"
         rev = VectorClock.from_string(rev_str)
         rev.set_clock(self.id, seq_id)
         return str(rev), seq_id
@@ -159,7 +160,7 @@ class Datastore(Generic[ID_TYPE], ABC):
     def _put(self, doc: Document):
         pass
 
-    def put(self, doc: Document, increment_rev=False) -> Tuple[int, Document]:
+    def put(self, doc: Document, increment_rev=False) -> tuple[int, Document]:
         """Put doc under docid if rev is greater, or doc doesn't currently exist
 
         Return number of records actually put (0 or 1).
@@ -172,10 +173,10 @@ class Datastore(Generic[ID_TYPE], ABC):
         """
         if not increment_rev and _REV not in doc:
             raise ValueError(
-                f"doc {doc.get(_ID, '')} must have {_REV}"
-                f' if increment_rev is False')
+                f"doc {doc.get(_ID, '')} must have {_REV}" f" if increment_rev is False"
+            )
 
-        assert doc.__class__ == Document, f'doc class is {doc.__class__}'
+        assert doc.__class__ == Document, f"doc class is {doc.__class__}"
 
         # copy doc so we don't modify caller's doc
         doc = doc.copy()
@@ -186,10 +187,10 @@ class Datastore(Generic[ID_TYPE], ABC):
         rev_str = doc.get(_REV, None)
         if increment_rev:
             if rev_str is None:
-                rev_str = '{}'
+                rev_str = "{}"
             rev = VectorClock.from_string(rev_str)
             # the new rev below would be >= to this:
-            rev.set_clock(self.id, self.sequence_id+1)
+            rev.set_clock(self.id, self.sequence_id + 1)
         else:
             # we threw a ValueError above if it was None
             assert rev_str is not None
@@ -205,22 +206,25 @@ class Datastore(Generic[ID_TYPE], ABC):
                 # Maybe sequence id changed since we looked above,
                 # use the one we just got
                 rev.set_clock(self.id, seq_id)
-                assert (_REV not in doc
-                        or rev > VectorClock.from_string(doc[_REV])), (
-                        'rev did not increase: {rev} !> {doc[_REV]} ')
+                assert _REV not in doc or rev > VectorClock.from_string(
+                    doc[_REV]
+                ), "rev did not increase: {rev} !> {doc[_REV]} "
                 doc[_REV] = str(rev)
             doc[_SEQ] = seq_id
             self._put(doc)
             ret = 1
 
             logger.debug(
-                f'{self.id}: Put docid {docid} doc {doc} rev {rev}'
-                f' inc_rev {increment_rev}'
-                f' (compared to my_doc {my_doc} my_rev {my_rev})')
+                f"{self.id}: Put docid {docid} doc {doc} rev {rev}"
+                f" inc_rev {increment_rev}"
+                f" (compared to my_doc {my_doc} my_rev {my_rev})"
+            )
         else:
-            logger.debug(f'{self.id}: Ignore docid {docid} doc {doc} rev {rev}'
-                         f' inc_rec {increment_rev}'
-                         f' (compared to doc {my_doc} my_rev {my_rev})')
+            logger.debug(
+                f"{self.id}: Ignore docid {docid} doc {doc} rev {rev}"
+                f" inc_rec {increment_rev}"
+                f" (compared to doc {my_doc} my_rev {my_rev})"
+            )
         return ret, doc
 
     def delete(self, docid: ID_TYPE) -> None:
@@ -236,7 +240,7 @@ class Datastore(Generic[ID_TYPE], ABC):
             seq_id = self._increment_sequence_id()
             doc[_SEQ] = seq_id
             self._set_new_rev(doc, seq_id)
-            logger.debug(f'{self.id}: after delete {doc}')
+            logger.debug(f"{self.id}: after delete {doc}")
             self._put(doc)
 
     def get_peer_sequence_id(self, peer: str) -> int:
@@ -246,7 +250,7 @@ class Datastore(Generic[ID_TYPE], ABC):
     def set_peer_sequence_id(self, peer: str, seq: int) -> None:
         """Set increment_rev peer sequence id, if seq > what we have."""
         if seq > self.get_peer_sequence_id(peer):
-            logger.debug(f'{self.id}: set peer_seq_ids[{peer}] = {seq}')
+            logger.debug(f"{self.id}: set peer_seq_ids[{peer}] = {seq}")
             self.peer_seq_ids[peer] = seq
 
     @abstractmethod
@@ -254,8 +258,7 @@ class Datastore(Generic[ID_TYPE], ABC):
         pass
 
     @abstractmethod
-    def get_docs_since(self, the_seq: int, num: int) \
-            -> Tuple[int, Sequence[Document]]:
+    def get_docs_since(self, the_seq: int, num: int) -> tuple[int, Sequence[Document]]:
         """Get docs put with the_seq < seq <= (the_seq+num).
 
         This is intended to be called repeatedly to get them all, so as to
@@ -274,11 +277,11 @@ class Datastore(Generic[ID_TYPE], ABC):
         After receiving these docs, the caller has all docs up to
         min(the_seq+num, current sequence id).
         """
-        pass
 
 
 class MemoryDatastore(Datastore):
     """An in-memory transient datastore, only useful for testing."""
+
     def __init__(self, datastore_name: str, datastore_id: str = None):
         super().__init__(datastore_name, datastore_id)
         self.datastore = OrderedDict()
@@ -306,8 +309,7 @@ class MemoryDatastore(Datastore):
         # preserve doc key order
         self.datastore.move_to_end(docid)
 
-    def get_docs_since(self, the_seq: int, num: int) \
-            -> Tuple[int, Sequence[Document]]:
+    def get_docs_since(self, the_seq: int, num: int) -> tuple[int, Sequence[Document]]:
         """Get docs put with the_seq < seq <= (the_seq+num).
 
         This is intended to be called repeatedly to get them all, so as to
@@ -330,8 +332,10 @@ class MemoryDatastore(Datastore):
 
 class DatabaseDatastore(Datastore, ABC):
     """Base datastore for a relational database."""
-    def __init__(self, datastore_name: str, conn, tablename: str,
-                 datastore_id: str = None):
+
+    def __init__(
+        self, datastore_name: str, conn, tablename: str, datastore_id: str = None
+    ):
         super().__init__(datastore_name, datastore_id)
         self.tablename = tablename
         self.conn = conn
@@ -364,14 +368,13 @@ class DatabaseDatastore(Datastore, ABC):
         self._init_datastore_id()
 
         # Get the column names for self.tablename
-        self.cursor.execute(f'SELECT * FROM {self.tablename} LIMIT 0')
+        self.cursor.execute(f"SELECT * FROM {self.tablename} LIMIT 0")
         self.columnnames = [desc[0] for desc in self.cursor.description]
 
         # Check that self.tablename has _id, _deleted, and _rev
         for field in (_ID, _REV, _DELETED):
             if field not in self.columnnames:
-                raise NameError("Field '%s' not in table '%s'" % (
-                    field, self.tablename))
+                raise NameError(f"Field '{field}' not in table '{self.tablename}'")
 
         # TODO: Check self.tablename has a unique index on _id
         # Required for proper functioning of UPSERT
@@ -394,58 +397,75 @@ class DatabaseDatastore(Datastore, ABC):
 
         Also raises an exception if the table doesn't exist."""
         self.cursor.execute(
-            'SELECT datastore_id, sequence_id FROM data_sync_revisions'
-            f' WHERE datastore_name={self.placeholder}',
-            (self.name,))
+            "SELECT datastore_id, sequence_id FROM data_sync_revisions"
+            f" WHERE datastore_name={self.placeholder}",
+            (self.name,),
+        )
         new_val = self.cursor.fetchone()
         if new_val:
             # Already an id, use it
             self.id = new_val[0]
             super()._set_sequence_id(new_val[1])
-            logger.debug(f'set self.id to {self.id},'
-                         f' _sequence_id to {self._sequence_id}')
+            logger.debug(
+                f"set self.id to {self.id}," f" _sequence_id to {self._sequence_id}"
+            )
         else:
             # No id, insert one
             assert self.id is not None
             self.cursor.execute(
-                'INSERT INTO data_sync_revisions'
-                ' (datastore_id, datastore_name, sequence_id)'
-                f' VALUES ({self.placeholder}, {self.placeholder}, 0)',
-                (self.id, self.name))
+                "INSERT INTO data_sync_revisions"
+                " (datastore_id, datastore_name, sequence_id)"
+                f" VALUES ({self.placeholder}, {self.placeholder}, 0)",
+                (self.id, self.name),
+            )
             super()._set_sequence_id(0)
-            logger.debug(f'set self.id to {self.id},'
-                         f' _sequence_id to {self._sequence_id}')
+            logger.debug(
+                f"set self.id to {self.id}," f" _sequence_id to {self._sequence_id}"
+            )
 
     def _set_sequence_id(self, the_id) -> None:
         # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
         # We want to support earlier sqlite versions, so we don't use it.
         # TODO: Test setting different sequence ids for different datastores
         self.cursor.execute(
-            f'UPDATE data_sync_revisions set sequence_id = {self.placeholder}'
-            f' WHERE datastore_id={self.placeholder}', (the_id, self.id,))
+            f"UPDATE data_sync_revisions set sequence_id = {self.placeholder}"
+            f" WHERE datastore_id={self.placeholder}",
+            (
+                the_id,
+                self.id,
+            ),
+        )
         self.cursor.execute(
-            'SELECT sequence_id FROM data_sync_revisions'
-            f' WHERE datastore_id={self.placeholder}',
-            (self.id,))
+            "SELECT sequence_id FROM data_sync_revisions"
+            f" WHERE datastore_id={self.placeholder}",
+            (self.id,),
+        )
         new_val = self.cursor.fetchone()[0]
         super()._set_sequence_id(the_id)
-        assert self._sequence_id == new_val, (
-                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+        assert self._sequence_id == new_val, "seq_id %d DB seq_id %d" % (
+            self._sequence_id,
+            new_val,
+        )
 
     def _increment_sequence_id(self) -> int:
         # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
         # We want to support earlier sqlite versions, so we don't use it.
         self.cursor.execute(
-            'UPDATE data_sync_revisions set sequence_id = sequence_id+1'
-            f' WHERE datastore_id={self.placeholder}', (self.id,))
+            "UPDATE data_sync_revisions set sequence_id = sequence_id+1"
+            f" WHERE datastore_id={self.placeholder}",
+            (self.id,),
+        )
         self.cursor.execute(
-            'SELECT sequence_id FROM data_sync_revisions'
-            f' WHERE datastore_id={self.placeholder}',
-            (self.id,))
+            "SELECT sequence_id FROM data_sync_revisions"
+            f" WHERE datastore_id={self.placeholder}",
+            (self.id,),
+        )
         new_val = self.cursor.fetchone()[0]
         super()._increment_sequence_id()
-        assert self._sequence_id == new_val, (
-                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+        assert self._sequence_id == new_val, "seq_id %d DB seq_id %d" % (
+            self._sequence_id,
+            new_val,
+        )
 
         return new_val
 
@@ -458,129 +478,141 @@ class DatabaseDatastore(Datastore, ABC):
 
         # "ON CONFLICT" added to sqlite upsert in version 3.24.0 (2018-06-04)
         # "ON CONFLICT" requires Postgres 9.5+
-        set_statement = ', '.join('%s=EXCLUDED.%s ' % (col, col)
-                                  for col in self.columnnames)
+        set_statement = ", ".join(f"{col}=EXCLUDED.{col} " for col in self.columnnames)
         upsert_statement = (
-            'INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (_id) DO UPDATE'
-            ' SET %s' % (
+            "INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (_id) DO UPDATE"
+            " SET %s"
+            % (
                 self.tablename,
-                ','.join(self.columnnames),
-                ','.join([self.placeholder for _ in self.columnnames]),
-                set_statement))
+                ",".join(self.columnnames),
+                ",".join([self.placeholder for _ in self.columnnames]),
+                set_statement,
+            )
+        )
 
         self.cursor.execute(
-            upsert_statement,
-            tuple([doc.get(key, None) for key in self.columnnames]))
+            upsert_statement, tuple([doc.get(key, None) for key in self.columnnames])
+        )
 
 
 class SqliteDatastore(DatabaseDatastore):
-    def __init__(self, datastore_name: str, conn, tablename: str,
-                 datastore_id: str = None):
+    def __init__(
+        self, datastore_name: str, conn, tablename: str, datastore_id: str = None
+    ):
         super().__init__(datastore_name, conn, tablename, datastore_id)
         # check sqlite version
         if sqlite3.sqlite_version_info < (3, 24, 0):
             raise Exception(
-                f'sqlite version is {sqlite3.sqlite_version},'
-                ' must be at least 3.24.0')
+                f"sqlite version is {sqlite3.sqlite_version},"
+                " must be at least 3.24.0"
+            )
 
         # set up SQL vars
-        self.placeholder = '?'
+        self.placeholder = "?"
 
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         """Return doc, or None if not present."""
         doc = None
         # TODO: Use include_deleted in the query
-        self.cursor.execute(
-            f'SELECT * FROM {self.tablename} WHERE _id=?',
-            (docid,))
+        self.cursor.execute(f"SELECT * FROM {self.tablename} WHERE _id=?", (docid,))
         docrow = self.cursor.fetchone()
         if docrow:
             doc = self._row_to_doc(docrow)
             # assert there was only one result
-            assert self.cursor.fetchone() is None, 'docid was %s' % docid
+            assert self.cursor.fetchone() is None, "docid was %s" % docid
             # Don't include deleted doc
             if doc.get(_DELETED, False) and not include_deleted:
                 doc = None
         return doc
 
-    def get_docs_since(self, the_seq: int, num: int) \
-            -> Tuple[int, Sequence[Document]]:
+    def get_docs_since(self, the_seq: int, num: int) -> tuple[int, Sequence[Document]]:
         """Get docs put with the_seq < seq <= (the_seq+num), ordered by seq.
 
         This is intended to be called repeatedly to get them all, so as to
         allow syncing in chunks.
         """
         self.cursor.execute(
-            f'SELECT * FROM {self.tablename}'
-            ' WHERE ? < _seq AND _seq <= ?'
-            ' ORDER BY _seq',
-            (the_seq, the_seq + num))
+            f"SELECT * FROM {self.tablename}"
+            " WHERE ? < _seq AND _seq <= ?"
+            " ORDER BY _seq",
+            (the_seq, the_seq + num),
+        )
         docs = [self._row_to_doc(docrow) for docrow in self.cursor.fetchall()]
         return self.sequence_id, docs
 
 
 class PostgresDatastore(DatabaseDatastore):
-    def __init__(self, datastore_name: str, conn, tablename: str,
-                 datastore_id: str = None):
+    def __init__(
+        self, datastore_name: str, conn, tablename: str, datastore_id: str = None
+    ):
         super().__init__(datastore_name, conn, tablename, datastore_id)
-        self.placeholder = '%s'
+        self.placeholder = "%s"
 
     def _set_sequence_id(self, the_id) -> None:
         # The RETURNING syntax has been supported by Postgres at least
         # since 9.5.
         # TODO: test setting different sequence ids for different datastores
         self.cursor.execute(
-            'UPDATE data_sync_revisions set sequence_id = %s'
-            ' WHERE datastore_id = %s'
-            ' RETURNING sequence_id', (the_id, self.id))
+            "UPDATE data_sync_revisions set sequence_id = %s"
+            " WHERE datastore_id = %s"
+            " RETURNING sequence_id",
+            (the_id, self.id),
+        )
         new_val = self.cursor.fetchone()[0]
         self._sequence_id = the_id
-        assert self._sequence_id == new_val, (
-                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+        assert self._sequence_id == new_val, "seq_id %d DB seq_id %d" % (
+            self._sequence_id,
+            new_val,
+        )
 
     def _increment_sequence_id(self) -> int:
         self.cursor.execute(
-            'UPDATE data_sync_revisions set sequence_id = sequence_id+1'
-            ' WHERE datastore_id=%s'
-            ' RETURNING sequence_id', (self.id,))
+            "UPDATE data_sync_revisions set sequence_id = sequence_id+1"
+            " WHERE datastore_id=%s"
+            " RETURNING sequence_id",
+            (self.id,),
+        )
         new_val = self.cursor.fetchone()[0]
         self._sequence_id += 1
-        assert self._sequence_id == new_val, (
-                'seq_id %d DB seq_id %d' % (self._sequence_id, new_val))
+        assert self._sequence_id == new_val, "seq_id %d DB seq_id %d" % (
+            self._sequence_id,
+            new_val,
+        )
         return new_val
 
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         """Return doc, or None if not present."""
         doc = None
         # TODO: Use include_deleted in the query
-        self.cursor.execute(
-            'SELECT * FROM %s WHERE _id=%%s' % self.tablename, (docid,))
+        self.cursor.execute("SELECT * FROM %s WHERE _id=%%s" % self.tablename, (docid,))
         docrow = self.cursor.fetchone()
         if docrow:
             doc = self._row_to_doc(docrow)
             # assert there was only one result
-            assert self.cursor.fetchone() is None, 'docid was %s' % docid
+            assert self.cursor.fetchone() is None, "docid was %s" % docid
             # Don't include deleted doc
             if doc.get(_DELETED, False) and not include_deleted:
                 doc = None
         return doc
 
-    def get_docs_since(self, the_seq: int, num: int) \
-            -> Tuple[int, Sequence[Document]]:
+    def get_docs_since(self, the_seq: int, num: int) -> tuple[int, Sequence[Document]]:
         """Get docs put with the_seq < seq <= (the_seq+num).
 
         This is intended to be called repeatedly to get them all, so as to
         allow syncing in chunks.
         """
         self.cursor.execute(
-            'SELECT * FROM %s WHERE %%s < _seq AND _seq <= %%s ORDER BY _seq'
-            % self.tablename, (the_seq, the_seq + num))
+            "SELECT * FROM %s WHERE %%s < _seq AND _seq <= %%s ORDER BY _seq"
+            % self.tablename,
+            (the_seq, the_seq + num),
+        )
         docs = [self._row_to_doc(docrow) for docrow in self.cursor.fetchall()]
         return self.sequence_id, docs
 
 
 class RestClientSourceDatastore(Datastore):
     """Communicate to a REST server for a datastore."""
+
     def __init__(self, baseurl: str, datastore: str):
         super().__init__(datastore)
         self.datastore = datastore
@@ -588,8 +620,9 @@ class RestClientSourceDatastore(Datastore):
 
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         resp = requests.get(
-            self._server_url(self.datastore + '/doc/' + docid),
-            params={'include_deleted': include_deleted})
+            self._server_url(self.datastore + "/doc/" + docid),
+            params={"include_deleted": include_deleted},
+        )
         ret = None
         if resp.status_code == 200:
             ret = resp.json()
@@ -597,30 +630,34 @@ class RestClientSourceDatastore(Datastore):
 
     def _put(self, doc: Document):
         # We re-implemented put(), so we don't need _put()
-        raise Exception('Not implemented')
+        raise Exception("Not implemented")
 
-    def put(self, doc: Document, increment_rev=False) -> Tuple[int, Document]:
-        logger.debug(f'RCSD {self.datastore}: put doc {doc}'
-                     f' increment_rev {increment_rev}')
+    def put(self, doc: Document, increment_rev=False) -> tuple[int, Document]:
+        logger.debug(
+            f"RCSD {self.datastore}: put doc {doc}" f" increment_rev {increment_rev}"
+        )
         resp = requests.post(
-            self._server_url(self.datastore + '/doc'),
-            params={'increment_rev': increment_rev},
-            json=doc)
+            self._server_url(self.datastore + "/doc"),
+            params={"increment_rev": increment_rev},
+            json=doc,
+        )
         assert resp.status_code == 200, resp.status_code
         json = resp.json()
-        return json['num_docs_put'], json['document']
+        return json["num_docs_put"], json["document"]
 
-    def get_docs_since(self, the_seq: int, num: int) -> Tuple[
-            int, Sequence[Document]]:
+    def get_docs_since(self, the_seq: int, num: int) -> tuple[int, Sequence[Document]]:
         resp = requests.get(
-            self._server_url(self.datastore + '/docs'),
-            params={'start_sequence_id': the_seq, 'chunk_size': num})
+            self._server_url(self.datastore + "/docs"),
+            params={"start_sequence_id": the_seq, "chunk_size": num},
+        )
         ret = None
         # TODO: What about 500?
         if resp.status_code == 200:
             js = resp.json()
-            ret = (js['current_sequence_id'],
-                   [Document(doc) for doc in js['documents']])
+            ret = (
+                js["current_sequence_id"],
+                [Document(doc) for doc in js["documents"]],
+            )
         return ret
 
     def _server_url(self, url: str) -> str:
