@@ -37,13 +37,14 @@ class VectorClock:
     def get_clock(self, clock, default=None) -> int:
         return self.clocks.get(clock, default)
 
+    # pylint: disable-next=too-many-return-statements,too-many-branches
     def _compare(self, other) -> Union[int, None]:
         all_keys = self.clocks.keys() | other.clocks.keys()
 
         # if there are keys, and every element in the vector is ==, then ==
         comp = len(all_keys) > 0
         for key in all_keys:
-            if not (self.clocks.get(key, 0) == other.clocks.get(key, 0)):
+            if not self.clocks.get(key, 0) == other.clocks.get(key, 0):
                 comp = False
                 break
         if comp:
@@ -56,7 +57,7 @@ class VectorClock:
         for key in all_keys:
             val = self.clocks.get(key, 0)
             other_val = other.clocks.get(key, 0)
-            if not (val <= other_val):
+            if not val <= other_val:
                 all_le = False
                 break
             if val < other_val:
@@ -71,7 +72,7 @@ class VectorClock:
         for key in all_keys:
             val = self.clocks.get(key, 0)
             other_val = other.clocks.get(key, 0)
-            if not (val >= other_val):
+            if not val >= other_val:
                 all_ge = False
                 break
             if val > other_val:
@@ -97,7 +98,7 @@ class VectorClock:
 
         if hash1 < hash2:
             return -1
-        elif hash1 > hash2:
+        if hash1 > hash2:
             return 1
 
         return 0

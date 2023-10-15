@@ -32,7 +32,7 @@ def create_app():
 
     @app.route("/")
     def hello():
-        return {"datastores": [key for key in datastores.keys()]}
+        return {"datastores": list(datastores)}
 
     # def _connstr():
     #     return ' '.join([
@@ -49,7 +49,7 @@ def create_app():
             # TODO: Return Location header of new resource
             # See also https://restfulapi.net/http-methods/#post
             return Response("", status=201)
-        elif request.method == "GET":
+        if request.method == "GET":
             if table not in datastores:
                 abort(404)
 
@@ -65,9 +65,10 @@ def create_app():
             abort(404)
         if request.method == "GET":
             return {"sequence_id": datastore.get_peer_sequence_id(source)}
-        elif request.method == "POST":
+        if request.method == "POST":
             datastore.set_peer_sequence_id(source, sequence_id)
             return "ok"
+        return "?"
 
     @app.route("/<table>/docs", methods=["GET", "POST"])
     def docs(table):
@@ -81,7 +82,7 @@ def create_app():
                 int(request.args.get("chunk_size", 10)),
             )
             return {"current_sequence_id": cur_seq_id, "documents": the_docs}
-        elif request.method == "POST":
+        if request.method == "POST":
             # put docs
             num_put = 0
             new_docs = []
@@ -97,6 +98,7 @@ def create_app():
                 return str(err), 422
             # TODO: should response have docs with clocks set?  I think yes.
             return {"num_docs_put": num_put, "documents": new_docs}
+        return {}
 
     @app.route("/<table>/doc/<docid>", methods=["GET"])
     @app.route("/<table>/doc", methods=["POST"], defaults={"docid": None})
@@ -109,12 +111,13 @@ def create_app():
             if not ret:
                 abort(404)
             return ret
-        elif request.method == "POST":
+        if request.method == "POST":
             increment_rev = request.args.get("increment_rev", False) == "True"
             num_put, new_doc = datastore.put(
                 Document(request.json), increment_rev=increment_rev
             )
             return {"num_docs_put": num_put, "document": new_doc}
+        return {}
 
     return app
 
@@ -122,5 +125,5 @@ def create_app():
 if __name__ == "__main__":
     util.logging_basic_config()
 
-    app = create_app()
-    app.run()
+    the_app = create_app()
+    the_app.run()

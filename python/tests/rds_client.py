@@ -12,6 +12,7 @@ from reldatasync.replicator import Replicator
 logger = logging.getLogger(__name__)
 
 
+# pylint: disable-next=too-many-statements
 def main():
     parser = argparse.ArgumentParser(description="Test REST server.")
     parser.add_argument(
@@ -93,9 +94,8 @@ def main():
     # server assigned revision numbers and sequence ids
     # compare data, except for _rev and _seq, set by server
     # also, they are returned in order
-    for idx in range(len(data)):
+    for idx, doc in enumerate(data):
         sdoc = docs[idx]
-        doc = data[idx]
         doc["_rev"] = sdoc["_rev"]
         doc["_seq"] = sdoc["_seq"]
         assert doc in docs

@@ -679,6 +679,7 @@ class _SqliteTestDatabase(_TestDatabase):
         self.datastore = SqliteDatastore(
             self.dsname, self._conn, table, datastore_id=datastore_id
         )
+        # pylint: disable-next=unnecessary-dunder-call
         self.datastore.__enter__()
 
     def create_test_db_and_tables(self):
@@ -722,6 +723,7 @@ class _PostgresTestDatabase(_TestDatabase):
         self.datastore = PostgresDatastore(
             self.dsname, self._conn, table, datastore_id=datastore_id
         )
+        # pylint: disable-next=unnecessary-dunder-call
         self.datastore.__enter__()
 
     @staticmethod
@@ -768,7 +770,7 @@ class _PostgresTestDatabase(_TestDatabase):
         return ret
 
     def drop_db(self):
-        self.exec_sql(lambda curs: curs.execute("DROP DATABASE %s" % self.dbname))
+        self.exec_sql(lambda curs: curs.execute(f"DROP DATABASE {self.dbname}"))
 
     def _database_exists(self, database_name):
         def exec_func(curs):
@@ -788,13 +790,14 @@ class _PostgresTestDatabase(_TestDatabase):
     def _create_test_db(self):
         def exec_func(curs):
             if not self._database_exists(self.dbname):
-                curs.execute("CREATE DATABASE %s" % self.dbname)
+                curs.execute(f"CREATE DATABASE {self.dbname}")
             else:
-                logger.info("database %s already exists" % self.dbname)
+                logger.info(f"database {self.dbname} already exists")
 
         self.exec_sql(exec_func, dbname=None, autocommit=True)
 
 
+# pylint: disable-next=too-many-instance-attributes
 class _TestDatabases:
     def __init__(self, testdbclass):
         # dbname is the database in which the datastore will live

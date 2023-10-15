@@ -11,7 +11,7 @@ def read_requirements():
     requirement_path = current + "/requirements.txt"
     install_requires = []
     if os.path.isfile(requirement_path):
-        with open(requirement_path) as f:
+        with open(requirement_path, encoding="utf-8") as f:
             install_requires = f.read().splitlines()
     return install_requires
 
