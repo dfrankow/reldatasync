@@ -585,7 +585,7 @@ class PostgresDatastore(DatabaseDatastore):
         """Return doc, or None if not present."""
         doc = None
         # TODO: Use include_deleted in the query
-        self.cursor.execute(f"SELECT * FROM {self.tablename} WHERE _id=%%s", (docid,))
+        self.cursor.execute(f"SELECT * FROM {self.tablename} WHERE _id=%s", (docid,))
         docrow = self.cursor.fetchone()
         if docrow:
             doc = self._row_to_doc(docrow)
@@ -604,7 +604,7 @@ class PostgresDatastore(DatabaseDatastore):
         """
         self.cursor.execute(
             f"SELECT * FROM {self.tablename} "
-            "WHERE %%s < _seq AND _seq <= %%s ORDER BY _seq",
+            "WHERE %s < _seq AND _seq <= %s ORDER BY _seq",
             (the_seq, the_seq + num),
         )
         docs = [self._row_to_doc(docrow) for docrow in self.cursor.fetchall()]
