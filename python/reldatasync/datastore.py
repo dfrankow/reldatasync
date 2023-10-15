@@ -427,28 +427,28 @@ class DatabaseDatastore(Datastore, ABC):
                 f"set self.id to {self.id}," f" _sequence_id to {self._sequence_id}"
             )
 
-    def _set_sequence_id(self, the_id) -> None:
-        # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
-        # We want to support earlier sqlite versions, so we don't use it.
-        # TODO: Test setting different sequence ids for different datastores
-        self.cursor.execute(
-            f"UPDATE data_sync_revisions set sequence_id = {self.placeholder}"
-            f" WHERE datastore_id={self.placeholder}",
-            (
-                the_id,
-                self.id,
-            ),
-        )
-        self.cursor.execute(
-            "SELECT sequence_id FROM data_sync_revisions"
-            f" WHERE datastore_id={self.placeholder}",
-            (self.id,),
-        )
-        new_val = self.cursor.fetchone()[0]
-        super()._set_sequence_id(the_id)
-        assert (
-            self._sequence_id == new_val
-        ), f"seq_id {self._sequence_id} DB seq_id {new_val}"
+    # def _set_sequence_id(self, the_id) -> None:
+    #     # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
+    #     # We want to support earlier sqlite versions, so we don't use it.
+    #     # TODO: Test setting different sequence ids for different datastores
+    #     self.cursor.execute(
+    #         f"UPDATE data_sync_revisions set sequence_id = {self.placeholder}"
+    #         f" WHERE datastore_id={self.placeholder}",
+    #         (
+    #             the_id,
+    #             self.id,
+    #         ),
+    #     )
+    #     self.cursor.execute(
+    #         "SELECT sequence_id FROM data_sync_revisions"
+    #         f" WHERE datastore_id={self.placeholder}",
+    #         (self.id,),
+    #     )
+    #     new_val = self.cursor.fetchone()[0]
+    #     super()._set_sequence_id(the_id)
+    #     assert (
+    #         self._sequence_id == new_val
+    #     ), f"seq_id {self._sequence_id} DB seq_id {new_val}"
 
     def _increment_sequence_id(self) -> int:
         # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
@@ -551,21 +551,21 @@ class PostgresDatastore(DatabaseDatastore):
         super().__init__(datastore_name, conn, tablename, datastore_id)
         self.placeholder = "%s"
 
-    def _set_sequence_id(self, the_id) -> None:
-        # The RETURNING syntax has been supported by Postgres at least
-        # since 9.5.
-        # TODO: test setting different sequence ids for different datastores
-        self.cursor.execute(
-            "UPDATE data_sync_revisions set sequence_id = %s"
-            " WHERE datastore_id = %s"
-            " RETURNING sequence_id",
-            (the_id, self.id),
-        )
-        new_val = self.cursor.fetchone()[0]
-        self._sequence_id = the_id
-        assert (
-            self._sequence_id == new_val
-        ), f"seq_id {self._sequence_id} DB seq_id {new_val}"
+    # def _set_sequence_id(self, the_id) -> None:
+    #     # The RETURNING syntax has been supported by Postgres at least
+    #     # since 9.5.
+    #     # TODO: test setting different sequence ids for different datastores
+    #     self.cursor.execute(
+    #         "UPDATE data_sync_revisions set sequence_id = %s"
+    #         " WHERE datastore_id = %s"
+    #         " RETURNING sequence_id",
+    #         (the_id, self.id),
+    #     )
+    #     new_val = self.cursor.fetchone()[0]
+    #     self._sequence_id = the_id
+    #     assert (
+    #         self._sequence_id == new_val
+    #     ), f"seq_id {self._sequence_id} DB seq_id {new_val}"
 
     def _increment_sequence_id(self) -> int:
         self.cursor.execute(
