@@ -24,7 +24,7 @@ def _json_serial(obj):
         # Example of naive datetime format: 2021-12-30T17:07:27.918653
         # Example of date format: 2021-12-30
         return obj.isoformat()
-    raise TypeError("Type %s not serializable" % type(obj))
+    raise TypeError(f"Type {type(obj)} not serializable")
 
 
 class JsonEncoder:

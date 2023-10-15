@@ -22,16 +22,15 @@ class Document(dict):
         # comparisons have to happen in the right order to respect None
         if one is None and two is None:
             return 0
-        elif one is None and two is not None:
+        if one is None and two is not None:
             return -1
-        elif one is not None and two is None:
+        if one is not None and two is None:
             return 1
-        elif one < two:
+        if one < two:
             return -1
-        elif one > two:
+        if one > two:
             return 1
-        else:
-            return 0
+        return 0
 
     def compare(self, other: "Document", ignore_keys: set[str] = None) -> int:
         """Return -1 if self < other, 0 if equal, 1 if self > other or other is None.
@@ -54,23 +53,25 @@ class Document(dict):
         # compare keys
         if other is None or len(keys) > len(other_keys):
             return 1
-        elif len(keys) < len(other_keys):
+        if len(keys) < len(other_keys):
             return -1
-        else:
-            # same number of keys, now compare them
-            for idx in range(len(keys)):
-                keycmp = Document._compare_vals(keys[idx], other_keys[idx])
-                if keycmp != 0:
-                    return keycmp
 
-            # keys were all the same, now compare values
-            for idx in range(len(keys)):
-                valcmp = Document._compare_vals(self[keys[idx]], other[other_keys[idx]])
-                if valcmp != 0:
-                    return valcmp
+        # same number of keys, now compare them
+        # pylint: disable-next=consider-using-enumerate
+        for idx in range(len(keys)):
+            keycmp = Document._compare_vals(keys[idx], other_keys[idx])
+            if keycmp != 0:
+                return keycmp
 
-            # everything was equal
-            return 0
+        # keys were all the same, now compare values
+        # pylint: disable-next=consider-using-enumerate
+        for idx in range(len(keys)):
+            valcmp = Document._compare_vals(self[keys[idx]], other[other_keys[idx]])
+            if valcmp != 0:
+                return valcmp
+
+        # everything was equal
+        return 0
 
     def __eq__(self, other):
         return self.compare(other) == 0

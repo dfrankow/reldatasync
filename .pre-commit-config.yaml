@@ -78,6 +78,36 @@ repos:
         # line length must match black and flake8
         - --profile=black
 
+- repo: https://github.com/PyCQA/pylint
+  rev: v3.0.1
+  hooks:
+    - id: pylint
+      args:
+        # black is controlling line length:
+        - --disable=line-too-long
+        # let's not worry too much right now about dup code.
+        - --disable=duplicate-code
+        # Decided to use _id and _rev variables to indicate
+        # variables controlled by reldatasync, so this would
+        # complain about protected access all throughout this code
+        - --disable=protected-access
+        - --disable=fixme
+        - --disable=import-error
+        - --disable=logging-fstring-interpolation
+        - --disable=missing-class-docstring
+        - --disable=missing-function-docstring
+        - --disable=missing-module-docstring
+        - --disable=too-few-public-methods
+        - --disable=too-many-arguments
+        # - --disable=too-many-branches
+        - --disable=too-many-locals
+        # isort is taking care of import order:
+        - --disable=wrong-import-order
+        # re-enable these args
+        - --disable=unused-argument
+        - --disable=invalid-name
+        - --disable=raise-missing-from
+
 - repo: https://github.com/Lucas-C/pre-commit-hooks
   rev: v1.5.4
   hooks:

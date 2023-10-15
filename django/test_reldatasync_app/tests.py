@@ -12,6 +12,7 @@ from reldatasync_app.models import SyncableModel
 from test_reldatasync_app.models import Organization, Patient
 
 
+# pylint: disable=too-many-instance-attributes,attribute-defined-outside-init
 class PatientTest(TestCase):
     def _create_org(self):
         self.org = Organization(name="org")
@@ -102,7 +103,7 @@ class PatientTest(TestCase):
             ds.put(pat2, increment_rev=True)
 
             # There are two patients with the same org, one from put()
-            pats = [pat for pat in Patient.objects.filter(org__name=self.org.name)]
+            pats = list(Patient.objects.filter(org__name=self.org.name))
             self.assertEqual(2, len(pats))
 
             # Out with Django

@@ -57,10 +57,7 @@ class Replicator:
         # source_seq_id is at least as new as the docs that came over
         assert (
             source_seq_id >= new_peer_seq_id
-        ), "source seq %d increment_rev peer seq %d" % (
-            source.sequence_id,
-            new_peer_seq_id,
-        )
+        ), f"source seq {source.sequence_id} increment_rev peer seq {new_peer_seq_id}"
 
         # we moved forward, or there were no updates
         assert new_peer_seq_id > old_peer_seq_id or source_seq_id == old_peer_seq_id

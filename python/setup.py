@@ -11,14 +11,14 @@ def read_requirements():
     requirement_path = current + "/requirements.txt"
     install_requires = []
     if os.path.isfile(requirement_path):
-        with open(requirement_path) as f:
+        with open(requirement_path, encoding="utf-8") as f:
             install_requires = f.read().splitlines()
     return install_requires
 
 
 setuptools.setup(
     name="reldatasync",
-    version="0.0.6",
+    version="0.0.7",
     author="Dan Frankowski",
     author_email="dfrankow+rds@gmail.com",
     description="Synchronize relational data between two datastores",

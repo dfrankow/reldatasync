@@ -72,7 +72,7 @@ class Datastore(Generic[ID_TYPE], ABC):
             if seq > doc_max_seq:
                 doc_max_seq = seq
 
-            if not (0 < doc[_SEQ] <= max_seq):
+            if not 0 < doc[_SEQ] <= max_seq:
                 logger.warning(f"doc {docid} has seq out of bounds {seq}")
                 ret = False
 
@@ -101,13 +101,15 @@ class Datastore(Generic[ID_TYPE], ABC):
 
         docs1 = sorted(docs1, key=functools.cmp_to_key(compare_no_seq))
         docs2 = sorted(docs2, key=functools.cmp_to_key(compare_no_seq))
-        # debug logging:
-        for idx in range(len(docs1)):
-            logger.debug(
-                f"{self.id} docs[{idx}]={docs1[idx]}\n"
-                f"{other.id} docs[{idx}]={docs2[idx]}\n"
-            )
+        if logger.isEnabledFor(logging.DEBUG):
+            # pylint: disable-next=consider-using-enumerate
+            for idx in range(len(docs1)):
+                logger.debug(
+                    f"{self.id} docs[{idx}]={docs1[idx]}\n"
+                    f"{other.id} docs[{idx}]={docs2[idx]}\n"
+                )
 
+        # pylint: disable-next=consider-using-enumerate
         for idx in range(len(docs1)):
             if docs1[idx].compare(docs2[idx], ignore_keys={_SEQ}) != 0:
                 logger.debug(
@@ -340,6 +342,7 @@ class DatabaseDatastore(Datastore, ABC):
         self.tablename = tablename
         self.conn = conn
         self.columnnames = None
+        self.cursor = None
 
         # set in child class
         self.placeholder = None
@@ -347,6 +350,7 @@ class DatabaseDatastore(Datastore, ABC):
     def _row_to_doc(self, docrow) -> Document:
         the_dict = {}
         assert len(docrow) == len(self.columnnames)
+        # pylint: disable-next=consider-using-enumerate
         for idx in range(len(docrow)):
             the_dict[self.columnnames[idx]] = docrow[idx]
         # Treat '_deleted' specially: get rid of it if it's None
@@ -442,10 +446,9 @@ class DatabaseDatastore(Datastore, ABC):
         )
         new_val = self.cursor.fetchone()[0]
         super()._set_sequence_id(the_id)
-        assert self._sequence_id == new_val, "seq_id %d DB seq_id %d" % (
-            self._sequence_id,
-            new_val,
-        )
+        assert (
+            self._sequence_id == new_val
+        ), f"seq_id {self._sequence_id} DB seq_id {new_val}"
 
     def _increment_sequence_id(self) -> int:
         # SQLite started supporting RETURNING in version 3.35.0 (2021-03-12).
@@ -462,10 +465,9 @@ class DatabaseDatastore(Datastore, ABC):
         )
         new_val = self.cursor.fetchone()[0]
         super()._increment_sequence_id()
-        assert self._sequence_id == new_val, "seq_id %d DB seq_id %d" % (
-            self._sequence_id,
-            new_val,
-        )
+        assert (
+            self._sequence_id == new_val
+        ), f"seq_id {self._sequence_id} DB seq_id {new_val}"
 
         return new_val
 
@@ -479,20 +481,21 @@ class DatabaseDatastore(Datastore, ABC):
         # "ON CONFLICT" added to sqlite upsert in version 3.24.0 (2018-06-04)
         # "ON CONFLICT" requires Postgres 9.5+
         set_statement = ", ".join(f"{col}=EXCLUDED.{col} " for col in self.columnnames)
+        col_names = ",".join(self.columnnames)
+        values = ",".join([self.placeholder for _ in self.columnnames])
         upsert_statement = (
-            "INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (_id) DO UPDATE"
-            " SET %s"
-            % (
-                self.tablename,
-                ",".join(self.columnnames),
-                ",".join([self.placeholder for _ in self.columnnames]),
-                set_statement,
-            )
+            f"INSERT INTO {self.tablename} ({col_names}) VALUES ({values})"
+            f" ON CONFLICT (_id) DO UPDATE"
+            f" SET {set_statement}"
         )
 
         self.cursor.execute(
-            upsert_statement, tuple([doc.get(key, None) for key in self.columnnames])
+            upsert_statement, tuple(doc.get(key, None) for key in self.columnnames)
         )
+
+
+class VersionError(Exception):
+    pass
 
 
 class SqliteDatastore(DatabaseDatastore):
@@ -502,7 +505,7 @@ class SqliteDatastore(DatabaseDatastore):
         super().__init__(datastore_name, conn, tablename, datastore_id)
         # check sqlite version
         if sqlite3.sqlite_version_info < (3, 24, 0):
-            raise Exception(
+            raise VersionError(
                 f"sqlite version is {sqlite3.sqlite_version},"
                 " must be at least 3.24.0"
             )
@@ -519,7 +522,7 @@ class SqliteDatastore(DatabaseDatastore):
         if docrow:
             doc = self._row_to_doc(docrow)
             # assert there was only one result
-            assert self.cursor.fetchone() is None, "docid was %s" % docid
+            assert self.cursor.fetchone() is None, f"docid was {docid}"
             # Don't include deleted doc
             if doc.get(_DELETED, False) and not include_deleted:
                 doc = None
@@ -560,10 +563,9 @@ class PostgresDatastore(DatabaseDatastore):
         )
         new_val = self.cursor.fetchone()[0]
         self._sequence_id = the_id
-        assert self._sequence_id == new_val, "seq_id %d DB seq_id %d" % (
-            self._sequence_id,
-            new_val,
-        )
+        assert (
+            self._sequence_id == new_val
+        ), f"seq_id {self._sequence_id} DB seq_id {new_val}"
 
     def _increment_sequence_id(self) -> int:
         self.cursor.execute(
@@ -574,22 +576,21 @@ class PostgresDatastore(DatabaseDatastore):
         )
         new_val = self.cursor.fetchone()[0]
         self._sequence_id += 1
-        assert self._sequence_id == new_val, "seq_id %d DB seq_id %d" % (
-            self._sequence_id,
-            new_val,
-        )
+        assert (
+            self._sequence_id == new_val
+        ), f"seq_id {self._sequence_id} DB seq_id {new_val}"
         return new_val
 
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         """Return doc, or None if not present."""
         doc = None
         # TODO: Use include_deleted in the query
-        self.cursor.execute("SELECT * FROM %s WHERE _id=%%s" % self.tablename, (docid,))
+        self.cursor.execute(f"SELECT * FROM {self.tablename} WHERE _id=%s", (docid,))
         docrow = self.cursor.fetchone()
         if docrow:
             doc = self._row_to_doc(docrow)
             # assert there was only one result
-            assert self.cursor.fetchone() is None, "docid was %s" % docid
+            assert self.cursor.fetchone() is None, f"docid was {docid}"
             # Don't include deleted doc
             if doc.get(_DELETED, False) and not include_deleted:
                 doc = None
@@ -602,8 +603,8 @@ class PostgresDatastore(DatabaseDatastore):
         allow syncing in chunks.
         """
         self.cursor.execute(
-            "SELECT * FROM %s WHERE %%s < _seq AND _seq <= %%s ORDER BY _seq"
-            % self.tablename,
+            f"SELECT * FROM {self.tablename} "
+            "WHERE %s < _seq AND _seq <= %s ORDER BY _seq",
             (the_seq, the_seq + num),
         )
         docs = [self._row_to_doc(docrow) for docrow in self.cursor.fetchall()]
@@ -630,7 +631,7 @@ class RestClientSourceDatastore(Datastore):
 
     def _put(self, doc: Document):
         # We re-implemented put(), so we don't need _put()
-        raise Exception("Not implemented")
+        raise NotImplementedError("Not implemented")
 
     def put(self, doc: Document, increment_rev=False) -> tuple[int, Document]:
         logger.debug(
