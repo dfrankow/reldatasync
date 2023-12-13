@@ -8,11 +8,11 @@ _TESTS_DIR = "tests"
 
 def main():
     # start server (async)
-    with Popen([f"{_TESTS_DIR}/rds_server.py"]) as server_process:
+    with Popen([f"{_TESTS_DIR}/rds_test_server.py"]) as server_process:
         # run client and check return value is 0
         time.sleep(1)
         client_process = run(
-            [f"{_TESTS_DIR}/rds_client.py", "-s", "127.0.0.1:5000/"], check=True
+            [f"{_TESTS_DIR}/rds_test_client.py", "-s", "127.0.0.1:5000/"], check=True
         )
         assert (
             client_process.returncode == 0
