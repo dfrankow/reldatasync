@@ -5,7 +5,6 @@ import sqlite3
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from collections.abc import Sequence
-from json import JSONDecodeError
 from typing import Generic
 
 import requests
@@ -199,7 +198,7 @@ class Datastore(Generic[ID_TYPE], ABC):
             assert rev_str is not None
             try:
                 rev = VectorClock.from_string(rev_str)
-            except JSONDecodeError as err:
+            except ValueError as err:
                 raise ValueError(f"{_REV} must be a JSON dictionary: {err}")
 
         my_doc = self.get(docid, include_deleted=True)
