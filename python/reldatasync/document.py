@@ -15,7 +15,8 @@ ID_TYPE = TypeVar("ID_TYPE")
 class Document(dict):
     def __init__(self, *arg, **kw):
         super().__init__(*arg, **kw)
-        assert _ID in self
+        if _ID not in self:
+            raise ValueError(f"Document must have {_ID}")
 
     @staticmethod
     def _compare_vals(one, two) -> int:

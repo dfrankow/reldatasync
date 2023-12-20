@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 datastores = {}
 
 
-def _get_datastore(table, autocreate=True):
+def _get_datastore(table, autocreate=True) -> MemoryDatastore:
     if table not in datastores and autocreate:
         # datastores[table] = PostgresDatastore('datastore', _connstr(), table)
         datastores[table] = MemoryDatastore("server")
@@ -113,9 +113,13 @@ def create_app():
             return ret
         if request.method == "POST":
             increment_rev = request.args.get("increment_rev", False) == "True"
-            num_put, new_doc = datastore.put(
-                Document(request.json), increment_rev=increment_rev
-            )
+            try:
+                num_put, new_doc = datastore.put(
+                    Document(request.json), increment_rev=increment_rev
+                )
+            except ValueError as err:
+                return str(err), 422
+
             return {"num_docs_put": num_put, "document": new_doc}
         return {}
 

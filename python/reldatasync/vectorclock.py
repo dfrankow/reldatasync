@@ -1,4 +1,5 @@
 import json
+from json import JSONDecodeError
 from typing import Union
 
 from reldatasync import util
@@ -135,5 +136,7 @@ class VectorClock:
 
     @staticmethod
     def from_string(string) -> "VectorClock":
-        # NOTE: check this is a valid string?
-        return VectorClock(json.loads(string))
+        try:
+            return VectorClock(json.loads(string))
+        except JSONDecodeError as err:
+            raise ValueError from err

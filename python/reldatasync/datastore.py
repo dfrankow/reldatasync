@@ -196,7 +196,10 @@ class Datastore(Generic[ID_TYPE], ABC):
         else:
             # we threw a ValueError above if it was None
             assert rev_str is not None
-            rev = VectorClock.from_string(rev_str)
+            try:
+                rev = VectorClock.from_string(rev_str)
+            except ValueError as err:
+                raise ValueError(f"{_REV} must be a JSON dictionary: {err}")
 
         my_doc = self.get(docid, include_deleted=True)
 
@@ -647,8 +650,9 @@ class RestClientSourceDatastore(Datastore):
         return json["num_docs_put"], json["document"]
 
     def get_docs_since(self, the_seq: int, num: int) -> tuple[int, Sequence[Document]]:
+        the_url = self._server_url(self.datastore + "/docs")
         resp = requests.get(
-            self._server_url(self.datastore + "/docs"),
+            the_url,
             params={"start_sequence_id": the_seq, "chunk_size": num},
         )
         ret = None
@@ -659,6 +663,8 @@ class RestClientSourceDatastore(Datastore):
                 js["current_sequence_id"],
                 [Document(doc) for doc in js["documents"]],
             )
+        elif resp.status_code == 404:
+            raise ValueError(f"{the_url} returned a 404 (not found)")
         return ret
 
     def _server_url(self, url: str) -> str:
