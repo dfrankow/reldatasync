@@ -10,3 +10,6 @@ local-all.sh
 # python files
 __pycache__/
 *.sqlite3
+
+# direnv
+.envrc
