@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 
 datastores = {}
 
+# The prefix of the URLs for interacting with the server
+SERVER_ROOT = "root"
+
 
 def _get_datastore(table, autocreate=True) -> MemoryDatastore:
     if table not in datastores and autocreate:
@@ -30,7 +33,7 @@ def create_app():
     #     shutdown_server()
     #     return 'Server shutting down...'
 
-    @app.route("/")
+    @app.route(f"/{SERVER_ROOT}/")
     def hello():
         return {"datastores": list(datastores)}
 
@@ -40,7 +43,7 @@ def create_app():
     #         "user=%s" % os.getenv('POSTGRES_USER', 'postgres'),
     #         "dbname=%s" % os.getenv('POSTGRES_DB', 'test')])
 
-    @app.route("/<table>", methods=["GET", "POST"])
+    @app.route(f"/{SERVER_ROOT}/<table>", methods=["GET", "POST"])
     def table_func(table):
         if request.method == "POST":
             # Create table
@@ -56,9 +59,13 @@ def create_app():
         return ""
 
     @app.route(
-        "/<table>/sequence_id/<source>", methods=["GET"], defaults={"sequence_id": None}
+        f"/{SERVER_ROOT}/<table>/sequence_id/<source>",
+        methods=["GET"],
+        defaults={"sequence_id": None},
     )
-    @app.route("/<table>/sequence_id/<source>/<sequence_id>", methods=["POST"])
+    @app.route(
+        f"/{SERVER_ROOT}/<table>/sequence_id/<source>/<sequence_id>", methods=["POST"]
+    )
     def sequence_id_func(table, source, sequence_id: int):
         datastore = _get_datastore(table, autocreate=False)
         if not datastore:
@@ -70,7 +77,7 @@ def create_app():
             return "ok"
         return "?"
 
-    @app.route("/<table>/docs", methods=["GET", "POST"])
+    @app.route(f"/{SERVER_ROOT}/<table>/docs", methods=["GET", "POST"])
     def docs(table):
         datastore = _get_datastore(table, autocreate=False)
         if not datastore:
@@ -100,8 +107,10 @@ def create_app():
             return {"num_docs_put": num_put, "documents": new_docs}
         return {}
 
-    @app.route("/<table>/doc/<docid>", methods=["GET"])
-    @app.route("/<table>/doc", methods=["POST"], defaults={"docid": None})
+    @app.route(f"/{SERVER_ROOT}/<table>/doc/<docid>", methods=["GET"])
+    @app.route(
+        f"/{SERVER_ROOT}/<table>/doc", methods=["POST"], defaults={"docid": None}
+    )
     def doc(table, docid):
         datastore = _get_datastore(table, autocreate=False)
         if not datastore:
