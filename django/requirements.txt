@@ -4,11 +4,27 @@
 #
 #    pip-compile
 #
-asgiref~=3.7.2
+annotated-types~=0.7.0
+    # via pydantic
+asgiref~=3.8.1
     # via django
-dj-database-url~=0.5.0
+dj-database-url~=2.2.0
     # via -r requirements.in
-django~=4.2.6
+django~=4.2.13
+    # via
+    #   -r requirements.in
+    #   dj-database-url
+    #   django-ninja
+django-ninja~=1.1.0
     # via -r requirements.in
-sqlparse~=0.4.4
+pydantic~=2.7.4
+    # via django-ninja
+pydantic-core~=2.18.4
+    # via pydantic
+sqlparse~=0.5.0
     # via django
+typing-extensions~=4.12.2
+    # via
+    #   dj-database-url
+    #   pydantic
+    #   pydantic-core
