@@ -27,7 +27,23 @@ class SyncableModel(models.Model):
     _deleted = models.BooleanField()
 
     @staticmethod
-    def get_datastore_by_name(datastore_name, db_table, conn=None):
+    def _get_class_by_name(name: str) -> type["SyncableModel"] | None:
+        """Return a subclass of SyncableModel with given name, or none."""
+        for cls in SyncableModel.__subclasses__():
+            if cls.__name__ == name:
+                return cls
+        return None
+
+    @staticmethod
+    def get_table_by_class_name(name: str) -> str | None:
+        result = None
+        cls = SyncableModel._get_class_by_name(name)
+        if cls:
+            result = cls._meta.db_table
+        return result
+
+    @staticmethod
+    def get_datastore_by_name(datastore_name, db_table, conn=None) -> PostgresDatastore:
         """Get Datastore given its name and db_table."""
         if not conn:
             conn = connections["default"]
