@@ -20,5 +20,5 @@ from reldatasync_app.api import api
 urlpatterns = [
     path("admin/", admin.site.urls),
     # _api/ must be in the project urls.py to register the namespace for the docs
-    path("api/v0", api.urls),
+    path("api/v0/", api.urls),
 ]
