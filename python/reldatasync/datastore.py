@@ -382,9 +382,16 @@ class DatabaseDatastore(Datastore, ABC):
         # Get the column names for self.tablename
         try:
             self.cursor.execute(f"SELECT * FROM {self.tablename} LIMIT 0")
-        except (sqlite3.OperationalError, psycopg2.errors.UndefinedTable) as err:
-            self.conn.rollback()
-            # TODO: wrap this exception
+        # It's bad to catch "Exception", but Django re-wraps all the errors, so the
+        # first level that is non-Django is "Exception"
+        except (
+            sqlite3.OperationalError,
+            psycopg2.errors.UndefinedTable,
+            Exception,
+        ) as err:
+            # We can't rollback because Django also manages the low-level connection
+            # So, the client has to manage this
+            # self.conn.rollback()
             raise NoSuchTable from err
         self.columnnames = [desc[0] for desc in self.cursor.description]
 
