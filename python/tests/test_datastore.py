@@ -670,7 +670,7 @@ class _SqliteTestDatabase(_TestDatabase):
     # TODO: factor out connect
     def connect(self, table, datastore_id=None):
         if datastore_id is None:
-            datastore_id = self.dbname + "_id"
+            datastore_id = self.dsname + "_id"
         self._conn = sqlite3.connect(
             self.dbname,
             # Use autocommit to not need transactions:
@@ -716,7 +716,7 @@ class _PostgresTestDatabase(_TestDatabase):
     # TODO: factor out connect
     def connect(self, table, datastore_id=None):
         if datastore_id is None:
-            datastore_id = self.dbname + "_id"
+            datastore_id = self.dsname + "_id"
         self._conn = psycopg2.connect(self._dbconnstr(self.dbname))
         # If we want to test with autocommit:
         # self._conn.autocommit = True
@@ -799,11 +799,15 @@ class _PostgresTestDatabase(_TestDatabase):
 
 # pylint: disable-next=too-many-instance-attributes
 class _TestDatabases:
+    SERVER_DBNAME = "rds_test_server"
+    CLIENT_DBNAME = "rds_test_client"
+    THIRD_DBNAME = "rds_test_third"
+
     def __init__(self, testdbclass):
         # dbname is the database in which the datastore will live
-        self.server_dbname = "server"
-        self.client_dbname = "client"
-        self.third_dbname = "third"
+        self.server_dbname = self.SERVER_DBNAME
+        self.client_dbname = self.CLIENT_DBNAME
+        self.third_dbname = self.THIRD_DBNAME
 
         # dsname is the name of the datastore, no matter where it lives
         self.server_dsname = "server"
