@@ -1,8 +1,10 @@
+import json
 import logging
+from json import JSONDecodeError
 
 from ninja import Field, NinjaAPI, Schema
 from ninja.errors import HttpError
-from reldatasync.datastore import Datastore
+from reldatasync.datastore import Datastore, NoSuchTable
 from reldatasync.document import Document
 from reldatasync_app.models import DataSyncRevisions, SyncableModel
 
@@ -50,21 +52,36 @@ def get_doc(
         return ret
 
 
-# TODO: Unit test
-@api.post("{datastore}/{table}/doc", response=dict)
-def post_doc(request, datastore: str, table: str, increment_rev: bool = False):
+# TODO: Test passing increment_rev
+@api.post("{datastore}/{object_name}/doc", response=dict)
+def post_doc(request, datastore: str, object_name: str, increment_rev: bool = False):
     """POST a doc to the datastore.
     :param: `increment_rev`: if true, add a revision to the doc, otherwise fail if
        one is not present.  Default: false.
 
     :return `{"document": doc, "num_docs_put": <int>}`.
     """
-    with _get_datastore(datastore, table) as datastore1:
-        # TODO(dan): Factor this out
-        num_put, new_doc = datastore1.put(
-            Document(request.json), increment_rev=increment_rev
-        )
-        return {"num_docs_put": num_put, "document": new_doc}
+    try:
+        table = SyncableModel.get_table_by_class_name(object_name)
+        if not table:
+            raise HttpError(403, f"Unknown table '{object_name}'")
+        with _get_datastore(datastore, table) as datastore1:
+            # django-ninja can't parse because we don't have a schema
+            the_body = request.body.decode("utf-8")
+            try:
+                data = json.loads(the_body)
+            except JSONDecodeError:
+                raise HttpError(422, f"Can't process POST body: {the_body}")
+            try:
+                num_put, new_doc = datastore1.put(
+                    Document(data), increment_rev=increment_rev
+                )
+            except ValueError as err:
+                raise HttpError(422, str(err))
+            return {"num_docs_put": num_put, "document": new_doc}
+    except NoSuchTable:
+        logger.warning(f"Table '{table}' not found")
+        raise HttpError(404, f"No such table '{table}'")
 
 
 # TODO: `/<datastore>/docs?start_sequence_id=<int>&chunk_size=<int>`

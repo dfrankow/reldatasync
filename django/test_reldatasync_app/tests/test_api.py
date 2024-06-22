@@ -1,11 +1,11 @@
 import json
 
-from django.test import Client, TestCase
+from django.test import Client, TransactionTestCase
 from django.urls import reverse
 from test_reldatasync_app.models import DATASTORE_NAME, Organization
 
 
-class ApiTest(TestCase):
+class ApiTest(TransactionTestCase):
     def test_datastores(self):
         client = Client()
         response = client.get(reverse("api-1.0.0:datastores"))
@@ -63,4 +63,70 @@ class ApiTest(TestCase):
         self.assertEqual(403, response.status_code, response.content)
         self.assertEqual(
             '{"detail": "Unknown table \'oops\'"}', response.content.decode("utf-8")
+        )
+
+    def test_put_doc(self):
+        self.assertEqual(0, Organization.objects.count())
+        client = Client()
+        the_url = reverse("api-1.0.0:post_doc", args=[DATASTORE_NAME, "Organization"])
+
+        # everything empty (no table) should error
+        response = client.post(the_url)
+        self.assertEqual(422, response.status_code, response.content)
+        self.assertEqual(
+            b'{"detail": "Can\'t process POST body: --BoUnDaRyStRiNg--\\r\\n"}',
+            response.content,
+        )
+
+        # create table
+        org = Organization(name="name")
+        org.save()
+
+        # empty doc should error
+        response = client.post(the_url, body="")
+        self.assertEqual(422, response.status_code, response.content)
+        self.assertEqual(
+            b'{"detail": "Can\'t process POST body: --BoUnDaRyStRiNg--\\r\\n"}',
+            response.content,
+        )
+
+        the_id = "aaa"
+        # no _id
+        name = "org name"
+        response = client.post(
+            the_url,
+            data={"name": name},
+            content_type="application/json",
+        )
+        self.assertEqual(422, response.status_code, response.content)
+        self.assertEqual(b'{"detail": "Document must have _id"}', response.content)
+        # self.assertEqual("org2", data)
+
+        # no _rev
+        response = client.post(
+            the_url,
+            data={"_id": the_id, "name": name},
+            content_type="application/json",
+        )
+        self.assertEqual(422, response.status_code, response.content)
+        self.assertEqual(
+            b'{"detail": "doc aaa must have _rev if increment_rev is False"}',
+            response.content,
+        )
+
+        # valid
+        response = client.post(
+            the_url,
+            data={"_id": the_id, "_rev": "{}", "name": name},
+            content_type="application/json",
+        )
+        self.assertEqual(200, response.status_code, response.content)
+        data = json.loads(response.content.decode("utf-8"))
+        self.assertEqual(
+            {
+                "num_docs_put": 1,
+                "document": {"_id": the_id, "_rev": "{}", "name": name, "_seq": 2},
+            },
+            data,
+            data,
         )
