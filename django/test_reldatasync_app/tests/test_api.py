@@ -54,7 +54,7 @@ class ApiTest(TestCase):
         response = client.get(the_url)
         self.assertEqual(403, response.status_code, response.content)
         self.assertEqual(
-            '{"message": "Doc \'oops\' not found"}', response.content.decode("utf-8")
+            '{"detail": "Doc \'oops\' not found"}', response.content.decode("utf-8")
         )
 
         # Unknown table
@@ -62,5 +62,5 @@ class ApiTest(TestCase):
         response = client.get(the_url)
         self.assertEqual(403, response.status_code, response.content)
         self.assertEqual(
-            '{"message": "Unknown table \'oops\'"}', response.content.decode("utf-8")
+            '{"detail": "Unknown table \'oops\'"}', response.content.decode("utf-8")
         )
