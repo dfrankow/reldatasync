@@ -20,11 +20,18 @@ class SyncableModel(models.Model):
 
     # fields needed for PostgresDatastore: _id, _rev, _deleted
     _id = models.CharField(
-        unique=True, primary_key=True, max_length=32, default=uuid4_string
+        unique=True,
+        primary_key=True,
+        max_length=32,
+        default=uuid4_string,
     )
-    _rev = models.CharField(max_length=REV_LENGTH)
-    _seq = models.IntegerField()
-    _deleted = models.BooleanField()
+    _rev = models.CharField(
+        max_length=REV_LENGTH, help_text="A vector clock representing a revision."
+    )
+    _seq = models.IntegerField(help_text="Sequence number.")
+    _deleted = models.BooleanField(
+        blank=True, null=True, help_text="True if the document is deleted."
+    )
 
     @staticmethod
     def _get_class_by_name(name: str) -> type["SyncableModel"] | None:
