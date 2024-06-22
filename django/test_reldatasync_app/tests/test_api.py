@@ -71,10 +71,10 @@ class ApiTest(TransactionTestCase):
         the_url = reverse("api-1.0.0:post_doc", args=[DATASTORE_NAME, "Organization"])
 
         # everything empty (no table) should error
-        response = client.post(the_url)
+        response = client.post(the_url, content_type="application/json")
         self.assertEqual(422, response.status_code, response.content)
         self.assertEqual(
-            b'{"detail": "Can\'t process POST body: --BoUnDaRyStRiNg--\\r\\n"}',
+            b'{"detail": "Document must have _id"}',
             response.content,
         )
 
@@ -83,10 +83,10 @@ class ApiTest(TransactionTestCase):
         org.save()
 
         # empty doc should error
-        response = client.post(the_url, body="")
+        response = client.post(the_url, body="{}", content_type="application/json")
         self.assertEqual(422, response.status_code, response.content)
         self.assertEqual(
-            b'{"detail": "Can\'t process POST body: --BoUnDaRyStRiNg--\\r\\n"}',
+            b'{"detail": "Document must have _id"}',
             response.content,
         )
 
@@ -115,6 +115,9 @@ class ApiTest(TransactionTestCase):
         )
 
         # valid
+        with self.assertRaises(Organization.DoesNotExist):
+            Organization.objects.get(name=name)
+
         response = client.post(
             the_url,
             data={"_id": the_id, "_rev": "{}", "name": name},
@@ -130,3 +133,8 @@ class ApiTest(TransactionTestCase):
             data,
             data,
         )
+        # And it actually got saved
+        org = Organization.objects.get(name=name)
+        self.assertEqual(the_id, org._id)
+        self.assertEqual("{}", org._rev)
+        self.assertEqual(2, org._seq)
