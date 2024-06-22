@@ -25,10 +25,6 @@ class DatastoreSchema(Schema):
     name: str = Field(alias="datastore_name")
 
 
-class ErrorSchema(Schema):
-    message: str
-
-
 @api.get("", response=list[DatastoreSchema])
 def datastores(request):
     return DataSyncRevisions.objects.all()
