@@ -138,3 +138,42 @@ class ApiTest(TransactionTestCase):
         self.assertEqual(the_id, org._id)
         self.assertEqual("{}", org._rev)
         self.assertEqual(2, org._seq)
+
+    def test_get_docs(self):
+        client = Client()
+        the_url = reverse("api-1.0.0:get_docs", args=[DATASTORE_NAME, "Organization"])
+
+        # empty
+        self.assertEqual(0, Organization.objects.count())
+        response = client.get(the_url, data={"start_sequence_id": 0})
+        self.assertEqual(200, response.status_code, response.content)
+        data = json.loads(response.content.decode("utf-8"))
+        self.assertEqual({"current_sequence_id": 0, "documents": []}, data)
+
+        # Add two orgs
+        name1 = "name1"
+        org1 = Organization(name=name1)
+        org1.save()
+        name2 = "name2"
+        org2 = Organization(name=name2)
+        org2.save()
+
+        # Get them both
+        response = client.get(the_url, data={"start_sequence_id": 0})
+        self.assertEqual(200, response.status_code, response.content)
+        data = json.loads(response.content.decode("utf-8"))
+        self.assertEqual(2, data["current_sequence_id"])
+        self.assertEqual(2, len(data["documents"]))
+        self.assertEqual(1, data["documents"][0]["_seq"])
+        self.assertEqual(name1, data["documents"][0]["name"])
+        self.assertEqual(2, data["documents"][1]["_seq"])
+        self.assertEqual(name2, data["documents"][1]["name"])
+
+        # Get only the second
+        response = client.get(the_url, data={"start_sequence_id": 1})
+        self.assertEqual(200, response.status_code, response.content)
+        data = json.loads(response.content.decode("utf-8"))
+        self.assertEqual(2, data["current_sequence_id"])
+        self.assertEqual(1, len(data["documents"]))
+        self.assertEqual(2, data["documents"][0]["_seq"])
+        self.assertEqual(name2, data["documents"][0]["name"])

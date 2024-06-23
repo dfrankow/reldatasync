@@ -85,3 +85,26 @@ def post_doc(request, datastore: str, object_name: str, increment_rev: bool = Fa
 # Return `{"current_sequence_id": cur_seq_id, "documents": the_docs}`
 #
 # POST a json array of docs.
+
+
+@api.get("{datastore}/{object_name}/docs", response=dict)
+def get_docs(
+    request,
+    datastore: str,
+    object_name: str,
+    start_sequence_id: int,
+    chunk_size: int = 100,
+):
+    """GET docs from datastore.
+
+    :param datastore:  Datastore
+    :param object_name:  Object name (i.e. table)
+    :param start_sequence_id:  Start from this sequence id
+    :param chunk_size:  In chunks this big
+    """
+    table = SyncableModel.get_table_by_class_name(object_name)
+    if not table:
+        raise HttpError(403, f"Unknown table '{object_name}'")
+    with _get_datastore(datastore, table) as datastore1:
+        seq_id, docs = datastore1.get_docs_since(start_sequence_id, chunk_size)
+        return {"current_sequence_id": seq_id, "documents": docs}
