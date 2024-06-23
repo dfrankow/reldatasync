@@ -667,6 +667,7 @@ class RestClientSourceDatastore(Datastore):
         json = resp.json()
         return json["num_docs_put"], json["document"]
 
+    # TODO: Unit test that deleted docs are included
     def get_docs_since(self, the_seq: int, num: int) -> tuple[int, Sequence[Document]]:
         the_url = self._server_url(self.datastore + "/docs")
         resp = requests.get(
