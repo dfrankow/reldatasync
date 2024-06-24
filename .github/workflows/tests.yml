@@ -53,8 +53,8 @@ jobs:
       run: |
         cd python
         # For debugging, uncomment LOG_LEVEL=DEBUG:
-        # LOG_LEVEL=DEBUG python setup.py test
-        python setup.py test
+        # LOG_LEVEL=DEBUG python -m unittest discover -s tests
+        python -m unittest discover -s tests
         # Install library for Django:
         python setup.py install
       env:
