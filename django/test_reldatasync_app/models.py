@@ -3,7 +3,6 @@ from django.utils import timezone
 from reldatasync_app.models import SyncableModel
 
 DATASTORE_NAME = "reldatasync_project_datastore"
-APP_NAME = "test_reldatasync_app"
 
 
 class Organization(SyncableModel):
