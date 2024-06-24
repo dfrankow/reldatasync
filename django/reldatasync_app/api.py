@@ -79,7 +79,7 @@ def post_doc(request, datastore: str, object_name: str, increment_rev: bool = Fa
 def _get_json_body(request):
     """Get request body and return decoded JSON.
 
-    Return 422 if request.body cannot be parsed
+    Raise 422 if request.body cannot be parsed
     """
     the_body = request.body.decode("utf-8")
     try:
