@@ -7,6 +7,7 @@ from collections import OrderedDict
 from collections.abc import Sequence
 from typing import Generic
 
+import psycopg2
 import requests
 from reldatasync import util
 from reldatasync.document import _DELETED, _ID, _REV, _SEQ, ID_TYPE, Document
@@ -335,6 +336,10 @@ class MemoryDatastore(Datastore):
         return self.sequence_id, docs
 
 
+class NoSuchTable(Exception):
+    pass
+
+
 class DatabaseDatastore(Datastore, ABC):
     """Base datastore for a relational database."""
 
@@ -375,7 +380,19 @@ class DatabaseDatastore(Datastore, ABC):
         self._init_datastore_id()
 
         # Get the column names for self.tablename
-        self.cursor.execute(f"SELECT * FROM {self.tablename} LIMIT 0")
+        try:
+            self.cursor.execute(f"SELECT * FROM {self.tablename} LIMIT 0")
+        # It's bad to catch "Exception", but Django re-wraps all the errors, so the
+        # first level that is non-Django is "Exception"
+        except (
+            sqlite3.OperationalError,
+            psycopg2.errors.UndefinedTable,
+            Exception,
+        ) as err:
+            # We can't rollback because Django also manages the low-level connection
+            # So, the client has to manage this
+            # self.conn.rollback()
+            raise NoSuchTable from err
         self.columnnames = [desc[0] for desc in self.cursor.description]
 
         # Check that self.tablename has _id, _deleted, and _rev
@@ -589,6 +606,7 @@ class PostgresDatastore(DatabaseDatastore):
         doc = None
         # TODO: Use include_deleted in the query
         self.cursor.execute(f"SELECT * FROM {self.tablename} WHERE _id=%s", (docid,))
+
         docrow = self.cursor.fetchone()
         if docrow:
             doc = self._row_to_doc(docrow)
@@ -649,6 +667,7 @@ class RestClientSourceDatastore(Datastore):
         json = resp.json()
         return json["num_docs_put"], json["document"]
 
+    # TODO: Unit test that deleted docs are included
     def get_docs_since(self, the_seq: int, num: int) -> tuple[int, Sequence[Document]]:
         the_url = self._server_url(self.datastore + "/docs")
         resp = requests.get(

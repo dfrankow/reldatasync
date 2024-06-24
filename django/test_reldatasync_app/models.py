@@ -2,12 +2,14 @@ from django.db import models
 from django.utils import timezone
 from reldatasync_app.models import SyncableModel
 
+DATASTORE_NAME = "reldatasync_project_datastore"
+
 
 class Organization(SyncableModel):
     name = models.CharField(max_length=255, unique=True)
 
     class DatastoreMeta:
-        datastore_name = "reldatasync_project_server"
+        datastore_name = DATASTORE_NAME
 
 
 class Patient(SyncableModel):
@@ -24,4 +26,4 @@ class Patient(SyncableModel):
     )
 
     class DatastoreMeta:
-        datastore_name = "reldatasync_project_server"
+        datastore_name = DATASTORE_NAME

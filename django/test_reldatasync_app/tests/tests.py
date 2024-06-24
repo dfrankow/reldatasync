@@ -8,14 +8,14 @@ from reldatasync.json import JsonDecoder, JsonEncoder
 from reldatasync.replicator import Replicator
 from reldatasync.schema import Schema
 from reldatasync.vectorclock import VectorClock
-from reldatasync_app.models import SyncableModel
-from test_reldatasync_app.models import Organization, Patient
+from reldatasync_app.models import DataSyncRevisions, SyncableModel
+from test_reldatasync_app.models import DATASTORE_NAME, Organization, Patient
 
 
 # pylint: disable=too-many-instance-attributes,attribute-defined-outside-init
 class PatientTest(TestCase):
-    def _create_org(self):
-        self.org = Organization(name="org")
+    def _create_org(self, name="org"):
+        self.org = Organization(name=name)
         self.org.save()
 
     def _create_patient(self):
@@ -35,6 +35,22 @@ class PatientTest(TestCase):
             org=self.org,
         )
         self.patient.save()
+
+    def test_datastore(self):
+        self.assertEqual(0, DataSyncRevisions.objects.count())
+        self.assertEqual(0, Organization.objects.count())
+
+        # datastore created
+        self._create_org(name="org1")
+        self.assertEqual(1, DataSyncRevisions.objects.count())
+        self.assertEqual(1, Organization.objects.count())
+        ds = DataSyncRevisions.objects.all().first()
+        self.assertEqual(ds.datastore_name, DATASTORE_NAME)
+
+        # same datastore used
+        self._create_org(name="org2")
+        self.assertEqual(1, DataSyncRevisions.objects.count())
+        self.assertEqual(2, Organization.objects.count())
 
     def test_create_delete(self):
         self._create_patient()

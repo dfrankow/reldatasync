@@ -20,14 +20,37 @@ class SyncableModel(models.Model):
 
     # fields needed for PostgresDatastore: _id, _rev, _deleted
     _id = models.CharField(
-        unique=True, primary_key=True, max_length=32, default=uuid4_string
+        unique=True,
+        primary_key=True,
+        max_length=32,
+        default=uuid4_string,
     )
-    _rev = models.CharField(max_length=REV_LENGTH)
-    _seq = models.IntegerField()
-    _deleted = models.BooleanField()
+    _rev = models.CharField(
+        max_length=REV_LENGTH, help_text="A vector clock representing a revision."
+    )
+    _seq = models.IntegerField(help_text="Sequence number.")
+    _deleted = models.BooleanField(
+        blank=True, null=True, help_text="True if the document is deleted."
+    )
 
     @staticmethod
-    def get_datastore_by_name(datastore_name, db_table, conn=None):
+    def _get_class_by_name(name: str) -> type["SyncableModel"] | None:
+        """Return a subclass of SyncableModel with given name, or none."""
+        for cls in SyncableModel.__subclasses__():
+            if cls.__name__ == name:
+                return cls
+        return None
+
+    @staticmethod
+    def get_table_by_class_name(name: str) -> str | None:
+        result = None
+        cls = SyncableModel._get_class_by_name(name)
+        if cls:
+            result = cls._meta.db_table
+        return result
+
+    @staticmethod
+    def get_datastore_by_name(datastore_name, db_table, conn=None) -> PostgresDatastore:
         """Get Datastore given its name and db_table."""
         if not conn:
             conn = connections["default"]

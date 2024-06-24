@@ -15,7 +15,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from reldatasync_app.api import api
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # _api/ must be in the project urls.py to register the namespace for the docs
+    path("api/v0/", api.urls),
 ]

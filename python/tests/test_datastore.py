@@ -11,6 +11,7 @@ from reldatasync import util
 from reldatasync.datastore import (
     Datastore,
     MemoryDatastore,
+    NoSuchTable,
     PostgresDatastore,
     SqliteDatastore,
 )
@@ -54,6 +55,40 @@ class _TestDatastore(unittest.TestCase):
         elif self.server.__class__ == SqliteDatastore:
             ds = SqliteDatastore("name", ds.conn if ds else None, table)
         return ds
+
+    def test_datastore_bad_name(self):
+        # datastore with a bad name returns an error
+        table = "whoops"
+        if self.server.__class__ == MemoryDatastore:
+            # MemoryDatastore has no bad names
+            pass
+        elif self.server.__class__ == PostgresDatastore:
+            ds = PostgresDatastore("name", self.server.conn, table)
+            with self.assertRaises(NoSuchTable):
+                # pylint: disable-next=unnecessary-dunder-call
+                ds.__enter__()
+            ds.conn.rollback()
+            ds.__exit__()
+            # The second time make sure we don't get "current transaction is aborted"
+            ds = PostgresDatastore("name", self.server.conn, table)
+            with self.assertRaises(NoSuchTable):
+                # pylint: disable-next=unnecessary-dunder-call
+                ds.__enter__()
+            ds.conn.rollback()
+            ds.__exit__()
+        elif self.server.__class__ == SqliteDatastore:
+            ds = SqliteDatastore("name", self.server.conn, table)
+            with self.assertRaises(NoSuchTable):
+                # pylint: disable-next=unnecessary-dunder-call
+                ds.__enter__()
+            ds.conn.rollback()
+            ds.__exit__()
+            # The second time make sure we don't get "current transaction is aborted"
+            with self.assertRaises(NoSuchTable):
+                # pylint: disable-next=unnecessary-dunder-call
+                ds.__enter__()
+            ds.conn.rollback()
+            ds.__exit__()
 
     def test_datastore_id(self):
         # datastore without an id is assigned a random one
