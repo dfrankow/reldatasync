@@ -67,12 +67,14 @@ class _TestDatastore(unittest.TestCase):
             with self.assertRaises(NoSuchTable):
                 # pylint: disable-next=unnecessary-dunder-call
                 ds.__enter__()
+            ds.conn.rollback()
             ds.__exit__()
             # The second time make sure we don't get "current transaction is aborted"
             ds = PostgresDatastore("name", self.server.conn, table)
             with self.assertRaises(NoSuchTable):
                 # pylint: disable-next=unnecessary-dunder-call
                 ds.__enter__()
+            ds.conn.rollback()
             ds.__exit__()
         elif self.server.__class__ == SqliteDatastore:
             ds = SqliteDatastore("name", self.server.conn, table)
