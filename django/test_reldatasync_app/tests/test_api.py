@@ -177,3 +177,38 @@ class ApiTest(TransactionTestCase):
         self.assertEqual(1, len(data["documents"]))
         self.assertEqual(2, data["documents"][0]["_seq"])
         self.assertEqual(name2, data["documents"][0]["name"])
+
+    def test_put_docs(self):
+        client = Client()
+        the_url = reverse("api-1.0.0:put_docs", args=[DATASTORE_NAME, "Organization"])
+
+        # POST three docs
+        self.assertEqual(0, Organization.objects.count())
+        three_docs = [
+            {"_id": f"id{the_id}", "_rev": "{}", "name": f"name{the_id}"}
+            for the_id in range(3)
+        ]
+        response = client.post(
+            the_url, data=three_docs, content_type="application/json"
+        )
+        self.assertEqual(200, response.status_code, response.content)
+        data = json.loads(response.content.decode("utf-8"))
+        self.assertEqual(3, data["num_docs_put"])
+        self.assertEqual(3, len(data["documents"]))
+        for the_id in range(3):
+            self.assertEqual(f"id{the_id}", data["documents"][the_id]["_id"])
+            self.assertEqual(f"name{the_id}", data["documents"][the_id]["name"])
+            # TODO: return the updated revs?
+            # rev = data["documents"][the_id]["_rev"]
+            # self.assertTrue(len(rev) > 2, rev)
+        # docs are in the DB
+        self.assertEqual(3, Organization.objects.count())
+
+        # POST again, nothing should change
+        response = client.post(
+            the_url, data=three_docs, content_type="application/json"
+        )
+        self.assertEqual(200, response.status_code, response.content)
+        data = json.loads(response.content.decode("utf-8"))
+        self.assertEqual(0, data["num_docs_put"])
+        self.assertEqual(0, len(data["documents"]))

@@ -63,11 +63,7 @@ def post_doc(request, datastore: str, object_name: str, increment_rev: bool = Fa
             raise HttpError(403, f"Unknown table '{object_name}'")
         with _get_datastore(datastore, table) as datastore1:
             # django-ninja can't parse because we don't have a schema
-            the_body = request.body.decode("utf-8")
-            try:
-                data = json.loads(the_body)
-            except JSONDecodeError:
-                raise HttpError(422, f"Can't process POST body: {the_body}")
+            data = _get_json_body(request)
             try:
                 num_put, new_doc = datastore1.put(
                     Document(data), increment_rev=increment_rev
@@ -80,11 +76,17 @@ def post_doc(request, datastore: str, object_name: str, increment_rev: bool = Fa
         raise HttpError(404, f"No such table '{table}'")
 
 
-# TODO: `/<datastore>/docs?start_sequence_id=<int>&chunk_size=<int>`
-# GET docs put with `start_sequence_id < _seq <= (start_sequence_id+chunk_size)`
-# Return `{"current_sequence_id": cur_seq_id, "documents": the_docs}`
-#
-# POST a json array of docs.
+def _get_json_body(request):
+    """Get request body and return decoded JSON.
+
+    Return 422 if request.body cannot be parsed
+    """
+    the_body = request.body.decode("utf-8")
+    try:
+        data = json.loads(the_body)
+    except JSONDecodeError:
+        raise HttpError(422, f"Can't process body: {the_body}")
+    return data
 
 
 @api.get("{datastore}/{object_name}/docs", response=dict)
@@ -95,12 +97,9 @@ def get_docs(
     start_sequence_id: int,
     chunk_size: int = 100,
 ):
-    """GET docs from datastore.
+    """GET docs with `start_sequence_id < _seq <= (start_sequence_id+chunk_size)`
 
-    :param datastore:  Datastore
-    :param object_name:  Object name (i.e. table)
-    :param start_sequence_id:  Start from this sequence id
-    :param chunk_size:  In chunks this big
+    Return `{"current_sequence_id": cur_seq_id, "documents": the_docs}`
     """
     table = SyncableModel.get_table_by_class_name(object_name)
     if not table:
@@ -108,3 +107,29 @@ def get_docs(
     with _get_datastore(datastore, table) as datastore1:
         seq_id, docs = datastore1.get_docs_since(start_sequence_id, chunk_size)
         return {"current_sequence_id": seq_id, "documents": docs}
+
+
+@api.post("{datastore}/{object_name}/docs", response=dict)
+def put_docs(request, datastore: str, object_name: str, increment_rev: bool = False):
+    """Put doc in given array of docs if rev is greater or doc doesn't exist.
+
+    Return `{"num_docs_put": num_put, "documents": new_docs}`
+    """
+    table = SyncableModel.get_table_by_class_name(object_name)
+    if not table:
+        raise HttpError(403, f"Unknown table '{object_name}'")
+    with _get_datastore(datastore, table) as datastore1:
+        num_put = 0
+        new_docs = []
+        try:
+            for the_doc in _get_json_body(request):
+                num, new_doc = datastore1.put(
+                    Document(the_doc), increment_rev=increment_rev
+                )
+                num_put += num
+                if num:
+                    new_docs.append(new_doc)
+        except ValueError as err:
+            raise HttpError(422, str(err))
+        # TODO: should response have docs with clocks set?  I think yes.
+        return {"num_docs_put": num_put, "documents": new_docs}
