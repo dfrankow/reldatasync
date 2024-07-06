@@ -30,7 +30,7 @@ jobs:
 
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     # Gradle plugin needs Java 11, so we can't use Java 8.
     # - name: Set up Java
     #   uses: actions/setup-java@v1.4.3
