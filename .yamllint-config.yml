@@ -4,3 +4,6 @@ rules:
   document-start: disable
   hyphens: disable
   indentation: disable
+  line-length:
+    ignore: |
+      .github/dependabot.yml
