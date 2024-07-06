@@ -1,0 +1,37 @@
+[project]
+name = "reldatasync"
+authors = [{ name = "Dan Frankowski"}]
+description = "Synchronize relational data between two datastores"
+# also change version in setup.cfg
+version = "0.0.8"
+license = {text = "MIT License"}
+readme = "README.md"
+keywords = ["relational database data synchronization"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.8,<4.0"
+# See https://stackoverflow.com/a/73600610
+dynamic = ["dependencies", "optional-dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/dfrankow/reldatasync/python"
+Issues = "https://github.com/dfrankow/reldatasync/issues"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+optional-dependencies = {test = { file = ["requirements-test.txt"] }}
