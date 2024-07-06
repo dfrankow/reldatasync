@@ -1,5 +1,3 @@
--r requirements.txt
-
 # packages for testing
 Flask
 requests
