@@ -18,7 +18,7 @@ def read_requirements():
 
 setuptools.setup(
     name="reldatasync",
-    version="0.0.7",
+    version="0.0.8",
     author="Dan Frankowski",
     author_email="dfrankow+rds@gmail.com",
     description="Synchronize relational data between two datastores",
