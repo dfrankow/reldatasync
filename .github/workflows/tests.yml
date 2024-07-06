@@ -44,7 +44,7 @@ jobs:
         cache: 'pip'
     # see https://github.com/pre-commit/action/#using-this-action
     - name: pre-commit checks
-      uses: pre-commit/action@v2.0.0
+      uses: pre-commit/action@v3.0.1
       env:
         # it's okay for github to commit to main/master
         SKIP: no-commit-to-branch
