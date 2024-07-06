@@ -44,6 +44,9 @@ jobs:
     # see https://github.com/pre-commit/action/#using-this-action
     - name: pre-commit checks
       uses: pre-commit/action@v2.0.0
+      env:
+        # it's okay for github to commit to main/master
+        SKIP: no-commit-to-branch
     - name: Install dependencies
       run: |
         cd python
