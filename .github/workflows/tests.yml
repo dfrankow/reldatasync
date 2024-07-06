@@ -30,7 +30,7 @@ jobs:
 
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     # Gradle plugin needs Java 11, so we can't use Java 8.
     # - name: Set up Java
     #   uses: actions/setup-java@v1.4.3
@@ -38,13 +38,13 @@ jobs:
     #     java-version: 1.8
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
     # see https://github.com/pre-commit/action/#using-this-action
     - name: pre-commit checks
-      uses: pre-commit/action@v2.0.0
+      uses: pre-commit/action@v3.0.1
       env:
         # it's okay for github to commit to main/master
         SKIP: no-commit-to-branch
