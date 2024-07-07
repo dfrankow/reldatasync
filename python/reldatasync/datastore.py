@@ -5,7 +5,7 @@ import sqlite3
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from collections.abc import Sequence
-from typing import Generic
+from typing import Generic, Optional
 
 import psycopg2
 import requests
@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class Datastore(Generic[ID_TYPE], ABC):
-    def __init__(self, datastore_name: str, datastore_id: str = None):
+    def __init__(self, datastore_name: str, datastore_id: Optional[str] = None):
         """Init a datastore.
 
-        :param  datastore_name  Human-readable name
-        :param  datastore_id  Unique identifier, used in revisions
+        :param datastore_name:  Human-readable name
+        :param datastore_id:  Unique identifier, used in revisions
                               Don't set the id unless you are sure.
                               If you have two datastores with the same id,
                               it won't be good.
@@ -288,7 +288,7 @@ class Datastore(Generic[ID_TYPE], ABC):
 class MemoryDatastore(Datastore):
     """An in-memory transient datastore, only useful for testing."""
 
-    def __init__(self, datastore_name: str, datastore_id: str = None):
+    def __init__(self, datastore_name: str, datastore_id: Optional[str] = None):
         super().__init__(datastore_name, datastore_id)
         self.datastore = OrderedDict()
 
@@ -344,7 +344,11 @@ class DatabaseDatastore(Datastore, ABC):
     """Base datastore for a relational database."""
 
     def __init__(
-        self, datastore_name: str, conn, tablename: str, datastore_id: str = None
+        self,
+        datastore_name: str,
+        conn,
+        tablename: str,
+        datastore_id: Optional[str] = None,
     ):
         super().__init__(datastore_name, datastore_id)
         self.tablename = tablename
@@ -392,7 +396,7 @@ class DatabaseDatastore(Datastore, ABC):
             # We can't rollback because Django also manages the low-level connection
             # So, the client has to manage this
             # self.conn.rollback()
-            raise NoSuchTable from err
+            raise NoSuchTable(self.tablename) from err
         self.columnnames = [desc[0] for desc in self.cursor.description]
 
         # Check that self.tablename has _id, _deleted, and _rev
@@ -412,6 +416,13 @@ class DatabaseDatastore(Datastore, ABC):
         super().__exit__()
         if self.cursor:
             self.cursor.close()
+
+    def _check_cursor(self):
+        if self.cursor is None:
+            raise RuntimeError(
+                "Cursor is not initialized.  "
+                "You must use this datastore in a 'with' statement"
+            )
 
     def _init_datastore_id(self):
         """Init datastore id and sequence_id.
@@ -509,6 +520,7 @@ class DatabaseDatastore(Datastore, ABC):
             f" SET {set_statement}"
         )
 
+        logger.debug(f"SQL: {upsert_statement}")
         self.cursor.execute(
             upsert_statement, tuple(doc.get(key, None) for key in self.columnnames)
         )
@@ -519,6 +531,8 @@ class VersionError(Exception):
 
 
 class SqliteDatastore(DatabaseDatastore):
+    """Sqlite datastore."""
+
     def __init__(
         self, datastore_name: str, conn, tablename: str, datastore_id: str = None
     ):
@@ -536,6 +550,7 @@ class SqliteDatastore(DatabaseDatastore):
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         """Return doc, or None if not present."""
         doc = None
+        self._check_cursor()
         # TODO: Use include_deleted in the query
         self.cursor.execute(f"SELECT * FROM {self.tablename} WHERE _id=?", (docid,))
         docrow = self.cursor.fetchone()
@@ -554,6 +569,7 @@ class SqliteDatastore(DatabaseDatastore):
         This is intended to be called repeatedly to get them all, so as to
         allow syncing in chunks.
         """
+        self._check_cursor()
         self.cursor.execute(
             f"SELECT * FROM {self.tablename}"
             " WHERE ? < _seq AND _seq <= ?"
@@ -588,6 +604,7 @@ class PostgresDatastore(DatabaseDatastore):
     #     ), f"seq_id {self._sequence_id} DB seq_id {new_val}"
 
     def _increment_sequence_id(self) -> int:
+        self._check_cursor()
         self.cursor.execute(
             "UPDATE data_sync_revisions set sequence_id = sequence_id+1"
             " WHERE datastore_id=%s"
@@ -604,6 +621,7 @@ class PostgresDatastore(DatabaseDatastore):
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         """Return doc, or None if not present."""
         doc = None
+        self._check_cursor()
         # TODO: Use include_deleted in the query
         self.cursor.execute(f"SELECT * FROM {self.tablename} WHERE _id=%s", (docid,))
 
@@ -623,6 +641,7 @@ class PostgresDatastore(DatabaseDatastore):
         This is intended to be called repeatedly to get them all, so as to
         allow syncing in chunks.
         """
+        self._check_cursor()
         self.cursor.execute(
             f"SELECT * FROM {self.tablename} "
             "WHERE %s < _seq AND _seq <= %s ORDER BY _seq",
@@ -635,14 +654,19 @@ class PostgresDatastore(DatabaseDatastore):
 class RestClientSourceDatastore(Datastore):
     """Communicate to a REST server for a datastore."""
 
-    def __init__(self, baseurl: str, datastore: str):
-        super().__init__(datastore)
-        self.datastore = datastore
+    def __init__(self, baseurl: str, datastore_name: str):
+        """Init a datastore.
+
+        :param baseurl: The base URL of the REST server
+        :param datastore_name:  Human-readable name
+        """
+        super().__init__(datastore_name)
+        self.datastore_name = datastore_name
         self.baseurl = baseurl
 
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         resp = requests.get(
-            self._server_url(self.datastore + "/doc/" + docid),
+            self._server_url(self.datastore_name + "/doc/" + docid),
             params={"include_deleted": include_deleted},
         )
         ret = None
@@ -656,10 +680,11 @@ class RestClientSourceDatastore(Datastore):
 
     def put(self, doc: Document, increment_rev=False) -> tuple[int, Document]:
         logger.debug(
-            f"RCSD {self.datastore}: put doc {doc}" f" increment_rev {increment_rev}"
+            f"RCSD {self.datastore_name}: put doc {doc}"
+            f" increment_rev {increment_rev}"
         )
         resp = requests.post(
-            self._server_url(self.datastore + "/doc"),
+            self._server_url(self.datastore_name + "/doc"),
             params={"increment_rev": increment_rev},
             json=doc,
         )
@@ -669,7 +694,7 @@ class RestClientSourceDatastore(Datastore):
 
     # TODO: Unit test that deleted docs are included
     def get_docs_since(self, the_seq: int, num: int) -> tuple[int, Sequence[Document]]:
-        the_url = self._server_url(self.datastore + "/docs")
+        the_url = self._server_url(self.datastore_name + "/docs")
         resp = requests.get(
             the_url,
             params={"start_sequence_id": the_seq, "chunk_size": num},
@@ -682,8 +707,9 @@ class RestClientSourceDatastore(Datastore):
                 js["current_sequence_id"],
                 [Document(doc) for doc in js["documents"]],
             )
-        elif resp.status_code == 404:
-            raise ValueError(f"{the_url} returned a 404 (not found)")
+        elif resp.status_code in (403, 404):
+            content = resp.content.decode("utf-8")
+            raise ValueError(f"{resp.url} returned HTTP {resp.status_code}: {content}")
         return ret
 
     def _server_url(self, url: str) -> str:

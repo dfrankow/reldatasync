@@ -6,6 +6,12 @@ from test_reldatasync_app.models import DATASTORE_NAME, Organization, Patient
 
 class ModelsTest(TransactionTestCase):
     def test_syncable_model_get_table(self):
+        # direct descendant
+        self.assertEqual(
+            Organization._meta.db_table,
+            SyncableModel.get_table_by_class_name("Organization"),
+        )
+        # indirect descendant
         self.assertEqual(
             Patient._meta.db_table, SyncableModel.get_table_by_class_name("Patient")
         )

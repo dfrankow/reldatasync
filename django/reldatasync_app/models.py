@@ -1,6 +1,6 @@
 from django.db import connections, models
 from reldatasync.datastore import PostgresDatastore
-from reldatasync.util import uuid4_string
+from reldatasync.util import all_subclasses, uuid4_string
 
 
 class DataSyncRevisions(models.Model):
@@ -36,7 +36,7 @@ class SyncableModel(models.Model):
     @staticmethod
     def _get_class_by_name(name: str) -> type["SyncableModel"] | None:
         """Return a subclass of SyncableModel with given name, or none."""
-        for cls in SyncableModel.__subclasses__():
+        for cls in all_subclasses(SyncableModel):
             if cls.__name__ == name:
                 return cls
         return None

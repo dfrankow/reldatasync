@@ -3,7 +3,7 @@ name = "reldatasync"
 authors = [{ name = "Dan Frankowski"}]
 description = "Synchronize relational data between two datastores"
 # also change version in setup.cfg
-version = "0.0.8"
+version = "0.0.9"
 license = {text = "MIT License"}
 readme = "README.md"
 keywords = ["relational database data synchronization"]
@@ -27,6 +27,10 @@ dynamic = ["dependencies", "optional-dependencies"]
 [project.urls]
 Homepage = "https://github.com/dfrankow/reldatasync/python"
 Issues = "https://github.com/dfrankow/reldatasync/issues"
+
+# See https://stackoverflow.com/a/73066937
+[project.scripts]
+"rds_client.py" = "reldatasync.rds_client:main"
 
 [build-system]
 requires = ["setuptools"]
