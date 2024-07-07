@@ -27,3 +27,13 @@ def logging_basic_config(level=None):
     logging.basicConfig(
         level=level, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
+
+
+def all_subclasses(cls):
+    """Get all subclasses of cls.
+
+    See also https://stackoverflow.com/a/3862957
+    """
+    return set(cls.__subclasses__()).union(
+        [s for c in cls.__subclasses__() for s in all_subclasses(c)]
+    )
