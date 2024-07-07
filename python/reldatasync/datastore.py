@@ -396,7 +396,7 @@ class DatabaseDatastore(Datastore, ABC):
             # We can't rollback because Django also manages the low-level connection
             # So, the client has to manage this
             # self.conn.rollback()
-            raise NoSuchTable from err
+            raise NoSuchTable(self.tablename) from err
         self.columnnames = [desc[0] for desc in self.cursor.description]
 
         # Check that self.tablename has _id, _deleted, and _rev
@@ -416,6 +416,13 @@ class DatabaseDatastore(Datastore, ABC):
         super().__exit__()
         if self.cursor:
             self.cursor.close()
+
+    def _check_cursor(self):
+        if self.cursor is None:
+            raise RuntimeError(
+                "Cursor is not initialized.  "
+                "You must use this datastore in a 'with' statement"
+            )
 
     def _init_datastore_id(self):
         """Init datastore id and sequence_id.
@@ -513,6 +520,7 @@ class DatabaseDatastore(Datastore, ABC):
             f" SET {set_statement}"
         )
 
+        logger.debug(f"SQL: {upsert_statement}")
         self.cursor.execute(
             upsert_statement, tuple(doc.get(key, None) for key in self.columnnames)
         )
@@ -542,6 +550,7 @@ class SqliteDatastore(DatabaseDatastore):
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         """Return doc, or None if not present."""
         doc = None
+        self._check_cursor()
         # TODO: Use include_deleted in the query
         self.cursor.execute(f"SELECT * FROM {self.tablename} WHERE _id=?", (docid,))
         docrow = self.cursor.fetchone()
@@ -560,6 +569,7 @@ class SqliteDatastore(DatabaseDatastore):
         This is intended to be called repeatedly to get them all, so as to
         allow syncing in chunks.
         """
+        self._check_cursor()
         self.cursor.execute(
             f"SELECT * FROM {self.tablename}"
             " WHERE ? < _seq AND _seq <= ?"
@@ -594,6 +604,7 @@ class PostgresDatastore(DatabaseDatastore):
     #     ), f"seq_id {self._sequence_id} DB seq_id {new_val}"
 
     def _increment_sequence_id(self) -> int:
+        self._check_cursor()
         self.cursor.execute(
             "UPDATE data_sync_revisions set sequence_id = sequence_id+1"
             " WHERE datastore_id=%s"
@@ -610,6 +621,7 @@ class PostgresDatastore(DatabaseDatastore):
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         """Return doc, or None if not present."""
         doc = None
+        self._check_cursor()
         # TODO: Use include_deleted in the query
         self.cursor.execute(f"SELECT * FROM {self.tablename} WHERE _id=%s", (docid,))
 
@@ -629,6 +641,7 @@ class PostgresDatastore(DatabaseDatastore):
         This is intended to be called repeatedly to get them all, so as to
         allow syncing in chunks.
         """
+        self._check_cursor()
         self.cursor.execute(
             f"SELECT * FROM {self.tablename} "
             "WHERE %s < _seq AND _seq <= %s ORDER BY _seq",
@@ -694,8 +707,9 @@ class RestClientSourceDatastore(Datastore):
                 js["current_sequence_id"],
                 [Document(doc) for doc in js["documents"]],
             )
-        elif resp.status_code == 404:
-            raise ValueError(f"{the_url} returned a 404 (not found)")
+        elif resp.status_code in (403, 404):
+            content = resp.content.decode("utf-8")
+            raise ValueError(f"{resp.url} returned HTTP {resp.status_code}: {content}")
         return ret
 
     def _server_url(self, url: str) -> str:
