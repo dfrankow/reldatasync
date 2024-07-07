@@ -28,6 +28,10 @@ dynamic = ["dependencies", "optional-dependencies"]
 Homepage = "https://github.com/dfrankow/reldatasync/python"
 Issues = "https://github.com/dfrankow/reldatasync/issues"
 
+# See https://stackoverflow.com/a/73066937
+[project.scripts]
+"rds_client.py" = "reldatasync.rds_client:main"
+
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
