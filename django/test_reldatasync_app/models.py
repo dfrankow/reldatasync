@@ -12,7 +12,18 @@ class Organization(SyncableModel):
         datastore_name = DATASTORE_NAME
 
 
-class Patient(SyncableModel):
+class IntermediateSyncableModel(SyncableModel):
+    """This is an intermediate model to test SyncableModel.get_table_by_class_name"""
+
+    class Meta:
+        # See https://docs.djangoproject.com/en/5.0/topics/db/models/#abstract-base-classes  # noqa: E501
+        abstract = True
+
+    class DatastoreMeta:
+        datastore_name = DATASTORE_NAME
+
+
+class Patient(IntermediateSyncableModel):
     name = models.CharField(max_length=255)
     residence = models.CharField(max_length=255)
     age = models.IntegerField()
