@@ -5,7 +5,7 @@ import sqlite3
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from collections.abc import Sequence
-from typing import Generic
+from typing import Generic, Optional
 
 import psycopg2
 import requests
@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class Datastore(Generic[ID_TYPE], ABC):
-    def __init__(self, datastore_name: str, datastore_id: str = None):
+    def __init__(self, datastore_name: str, datastore_id: Optional[str] = None):
         """Init a datastore.
 
-        :param  datastore_name  Human-readable name
-        :param  datastore_id  Unique identifier, used in revisions
+        :param datastore_name:  Human-readable name
+        :param datastore_id:  Unique identifier, used in revisions
                               Don't set the id unless you are sure.
                               If you have two datastores with the same id,
                               it won't be good.
@@ -288,7 +288,7 @@ class Datastore(Generic[ID_TYPE], ABC):
 class MemoryDatastore(Datastore):
     """An in-memory transient datastore, only useful for testing."""
 
-    def __init__(self, datastore_name: str, datastore_id: str = None):
+    def __init__(self, datastore_name: str, datastore_id: Optional[str] = None):
         super().__init__(datastore_name, datastore_id)
         self.datastore = OrderedDict()
 
@@ -344,7 +344,11 @@ class DatabaseDatastore(Datastore, ABC):
     """Base datastore for a relational database."""
 
     def __init__(
-        self, datastore_name: str, conn, tablename: str, datastore_id: str = None
+        self,
+        datastore_name: str,
+        conn,
+        tablename: str,
+        datastore_id: Optional[str] = None,
     ):
         super().__init__(datastore_name, datastore_id)
         self.tablename = tablename
@@ -519,6 +523,8 @@ class VersionError(Exception):
 
 
 class SqliteDatastore(DatabaseDatastore):
+    """Sqlite datastore."""
+
     def __init__(
         self, datastore_name: str, conn, tablename: str, datastore_id: str = None
     ):
@@ -635,14 +641,19 @@ class PostgresDatastore(DatabaseDatastore):
 class RestClientSourceDatastore(Datastore):
     """Communicate to a REST server for a datastore."""
 
-    def __init__(self, baseurl: str, datastore: str):
-        super().__init__(datastore)
-        self.datastore = datastore
+    def __init__(self, baseurl: str, datastore_name: str):
+        """Init a datastore.
+
+        :param baseurl: The base URL of the REST server
+        :param datastore_name:  Human-readable name
+        """
+        super().__init__(datastore_name)
+        self.datastore_name = datastore_name
         self.baseurl = baseurl
 
     def get(self, docid: ID_TYPE, include_deleted=False) -> Document:
         resp = requests.get(
-            self._server_url(self.datastore + "/doc/" + docid),
+            self._server_url(self.datastore_name + "/doc/" + docid),
             params={"include_deleted": include_deleted},
         )
         ret = None
@@ -656,10 +667,11 @@ class RestClientSourceDatastore(Datastore):
 
     def put(self, doc: Document, increment_rev=False) -> tuple[int, Document]:
         logger.debug(
-            f"RCSD {self.datastore}: put doc {doc}" f" increment_rev {increment_rev}"
+            f"RCSD {self.datastore_name}: put doc {doc}"
+            f" increment_rev {increment_rev}"
         )
         resp = requests.post(
-            self._server_url(self.datastore + "/doc"),
+            self._server_url(self.datastore_name + "/doc"),
             params={"increment_rev": increment_rev},
             json=doc,
         )
@@ -669,7 +681,7 @@ class RestClientSourceDatastore(Datastore):
 
     # TODO: Unit test that deleted docs are included
     def get_docs_since(self, the_seq: int, num: int) -> tuple[int, Sequence[Document]]:
-        the_url = self._server_url(self.datastore + "/docs")
+        the_url = self._server_url(self.datastore_name + "/docs")
         resp = requests.get(
             the_url,
             params={"start_sequence_id": the_seq, "chunk_size": num},
