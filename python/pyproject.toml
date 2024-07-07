@@ -3,7 +3,7 @@ name = "reldatasync"
 authors = [{ name = "Dan Frankowski"}]
 description = "Synchronize relational data between two datastores"
 # also change version in setup.cfg
-version = "0.0.9"
+version = "0.0.10"
 license = {text = "MIT License"}
 readme = "README.md"
 keywords = ["relational database data synchronization"]
