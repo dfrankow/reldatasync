@@ -9,6 +9,12 @@ To install the reldatasync python package:
 $ python -m pip install ../python/
 ```
 
+To test installing the django-reldatasync python package:
+
+```
+$ python -m pip install -e .
+```
+
 To configure for testing:
 
 ```

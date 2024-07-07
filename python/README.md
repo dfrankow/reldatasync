@@ -30,6 +30,12 @@ Run tests in one file with:
 python -m unittest tests.test_document
 ```
 
+To test installing the reldatasync python package:
+
+```
+$ python -m pip install -e .
+```
+
 
 REST protocol
 =============
