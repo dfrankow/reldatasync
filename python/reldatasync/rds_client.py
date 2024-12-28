@@ -3,6 +3,7 @@
 """
 A simple test client that synchronizes one table and prints the output to stdout.
 """
+
 import argparse
 import json
 import sqlite3
