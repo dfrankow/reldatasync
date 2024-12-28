@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 import logging
 import os
 import random
@@ -41,11 +42,17 @@ class _TestDatastore(unittest.TestCase):
     def assert_equals_no_seq(self, ds1, ds2):
         self.assertTrue(ds1.equals_no_seq(ds2))
 
-    def sync_and_check(self, ds1: Datastore, ds2: Datastore):
+    def sync(self, ds1: Datastore, ds2: Datastore):
         Replicator(ds1, ds2).sync_both_directions()
+
+    def check(self, ds1: Datastore, ds2: Datastore):
         self.assertTrue(ds1.equals_no_seq(ds2))
         self.assertTrue(ds1.check())
         self.assertTrue(ds2.check())
+
+    def sync_and_check(self, ds1: Datastore, ds2: Datastore):
+        Replicator(ds1, ds2).sync_both_directions()
+        self.check(ds1, ds2)
 
     def _get_datastore(self, ds, table):
         if self.server.__class__ == MemoryDatastore:
@@ -124,20 +131,36 @@ class _TestDatastore(unittest.TestCase):
         self.assertEqual(2, seq)
         self.assertEqual(str(VectorClock({"server_id": 2})), rev)
 
+    def test_equals_no_seq(self):
+        # server makes object A v1
+        self.server.put(Document(**{_ID: "A", "value": "val1"}), increment_rev=True)
+        # client makes object A v1
+        self.client.put(Document(**{_ID: "A", "value": "val2"}), increment_rev=True)
+
+        # client updates object to be the same val1, but seq has changed
+        self.client.put(Document(**{_ID: "A", "value": "val1"}), increment_rev=True)
+
+        sdoc = self.server.get("A")
+        cdoc = self.client.get("A")
+        self.assertNotEqual(sdoc, cdoc)
+        self.assertEqual(1, sdoc.seq)
+        self.assertEqual(2, cdoc.seq)
+        self.assert_equals_no_seq(self.server, self.client)
+
     def test_nonoverlapping_sync(self):
         """Non-overlapping documents from datastore"""
         # server makes object A v1
-        self.server.put(Document({_ID: "A", "value": "val1"}), increment_rev=True)
+        self.server.put(Document(**{_ID: "A", "value": "val1"}), increment_rev=True)
         # client makes object B v1
-        self.client.put(Document({_ID: "B", "value": "val2"}), increment_rev=True)
+        self.client.put(Document(**{_ID: "B", "value": "val2"}), increment_rev=True)
 
         # sync leaves both server and client with A val1, B val2
-        self.sync_and_check(self.client, self.server)
+        self.sync(self.client, self.server)
 
         # client
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "A",
                     "value": "val1",
                     _REV: str(VectorClock({self.server.id: 1})),
@@ -149,7 +172,7 @@ class _TestDatastore(unittest.TestCase):
         )
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "B",
                     "value": "val2",
                     _REV: str(VectorClock({self.client.id: 1})),
@@ -162,7 +185,7 @@ class _TestDatastore(unittest.TestCase):
         # server
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "A",
                     "value": "val1",
                     _REV: str(VectorClock({self.server.id: 1})),
@@ -173,7 +196,7 @@ class _TestDatastore(unittest.TestCase):
         )
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "B",
                     "value": "val2",
                     _REV: str(VectorClock({self.client.id: 1})),
@@ -187,38 +210,40 @@ class _TestDatastore(unittest.TestCase):
         # counter is at the highest existing doc version
         server_seq, server_docs = self.server.get_docs_since(0, 1000)
         self.assertEqual(self.server.sequence_id, server_seq)
-        self.assertEqual(self.server.sequence_id, max(doc[_SEQ] for doc in server_docs))
+        self.assertEqual(self.server.sequence_id, max(doc.seq for doc in server_docs))
 
         client_seq, client_docs = self.client.get_docs_since(0, 1000)
         self.assertEqual(self.client.sequence_id, client_seq)
-        self.assertEqual(self.client.sequence_id, max(doc[_SEQ] for doc in client_docs))
+        self.assertEqual(self.client.sequence_id, max(doc.seq for doc in client_docs))
+
+        self.check(self.client, self.server)
 
     def test_put_if_needed(self):
         """put_if_needed doesn't put a second time"""
-        doc = Document({_ID: "A", "value": "val1"})
+        doc = Document(**{_ID: "A", "value": "val1"})
         # put the doc
         num, doc = self.server.put(doc, increment_rev=True)
         self.assertEqual(1, num)
         # get doc back out with its _REV set
-        self.assertTrue(doc[_REV])
+        self.assertTrue(doc.rev)
         # doc is already present, so it's not put again
         self.assertEqual(0, self.server.put(doc)[0])
 
         # doc is already present, but we said we changed it, so it's put
-        doc["value"] = "val2"
+        doc.value = "val2"
         num, new_doc = self.server.put(doc, increment_rev=True)
         self.assertEqual(1, num)
-        self.assertEqual("val2", new_doc["value"])
+        self.assertEqual("val2", new_doc.value)
         self.assertEqual(self.server.get("A"), new_doc)
 
     def test_overlapping_sync(self):
         """Overlapping documents from datastore"""
         # server makes object A v1
-        self.server.put(Document({_ID: "A", "value": "val1"}), increment_rev=True)
-        self.server.put(Document({_ID: "C", "value": "val3"}), increment_rev=True)
+        self.server.put(Document(**{_ID: "A", "value": "val1"}), increment_rev=True)
+        self.server.put(Document(**{_ID: "C", "value": "val3"}), increment_rev=True)
         # client makes object B v1
-        self.client.put(Document({_ID: "B", "value": "val2"}), increment_rev=True)
-        self.client.put(Document({_ID: "C", "value": "val4"}), increment_rev=True)
+        self.client.put(Document(**{_ID: "B", "value": "val2"}), increment_rev=True)
+        self.client.put(Document(**{_ID: "C", "value": "val4"}), increment_rev=True)
 
         # sync leaves both server and client with A val1,  B val2, C val4
         self.sync_and_check(self.client, self.server)
@@ -226,7 +251,7 @@ class _TestDatastore(unittest.TestCase):
         # client
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "A",
                     "value": "val1",
                     _REV: str(VectorClock({self.server.id: 1})),
@@ -237,7 +262,7 @@ class _TestDatastore(unittest.TestCase):
         )
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "B",
                     "value": "val2",
                     _REV: str(VectorClock({self.client.id: 1})),
@@ -249,7 +274,7 @@ class _TestDatastore(unittest.TestCase):
         # server's C won
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "C",
                     "value": "val3",
                     _REV: str(VectorClock({self.server.id: 2})),
@@ -262,7 +287,7 @@ class _TestDatastore(unittest.TestCase):
         # server
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "A",
                     "value": "val1",
                     _REV: str(VectorClock({self.server.id: 1})),
@@ -273,7 +298,7 @@ class _TestDatastore(unittest.TestCase):
         )
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "B",
                     "value": "val2",
                     _REV: str(VectorClock({self.client.id: 1})),
@@ -285,7 +310,7 @@ class _TestDatastore(unittest.TestCase):
         # server's C won
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "C",
                     "value": "val3",
                     _REV: str(VectorClock({self.server.id: 2})),
@@ -297,8 +322,8 @@ class _TestDatastore(unittest.TestCase):
         )
 
     def test_get_docs_since(self):
-        self.server.put(Document({_ID: "A", "value": "val1"}), increment_rev=True)
-        self.server.put(Document({_ID: "C", "value": "val3"}), increment_rev=True)
+        self.server.put(Document(**{_ID: "A", "value": "val1"}), increment_rev=True)
+        self.server.put(Document(**{_ID: "C", "value": "val3"}), increment_rev=True)
         doca = self.server.get("A")
         docc = self.server.get("C")
         # since 0 returns all the docs, in order
@@ -322,11 +347,11 @@ class _TestDatastore(unittest.TestCase):
     def test_delete_sync(self):
         """Test that deletes get through syncing"""
         # server makes object A v1
-        self.server.put(Document({_ID: "A", "value": "val1"}), increment_rev=True)
-        self.server.put(Document({_ID: "C", "value": "val3"}), increment_rev=True)
+        self.server.put(Document(**{_ID: "A", "value": "val1"}), increment_rev=True)
+        self.server.put(Document(**{_ID: "C", "value": "val3"}), increment_rev=True)
         # client makes object B v1
-        self.client.put(Document({_ID: "B", "value": "val2"}), increment_rev=True)
-        self.client.put(Document({_ID: "C", "value": "val4"}), increment_rev=True)
+        self.client.put(Document(**{_ID: "B", "value": "val2"}), increment_rev=True)
+        self.client.put(Document(**{_ID: "C", "value": "val4"}), increment_rev=True)
 
         # delete some
         self.server.delete("A")
@@ -338,7 +363,7 @@ class _TestDatastore(unittest.TestCase):
         # client
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "A",
                     "value": "val1",
                     _REV: str(VectorClock({self.server.id: 3})),
@@ -350,7 +375,7 @@ class _TestDatastore(unittest.TestCase):
         )
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "B",
                     "value": "val2",
                     _REV: str(VectorClock({self.client.id: 1})),
@@ -361,7 +386,7 @@ class _TestDatastore(unittest.TestCase):
         )
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "C",
                     "value": "val4",
                     _REV: str(VectorClock({self.client.id: 3})),
@@ -376,7 +401,7 @@ class _TestDatastore(unittest.TestCase):
         # server
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "A",
                     "value": "val1",
                     _REV: str(VectorClock({self.server.id: 3})),
@@ -388,7 +413,7 @@ class _TestDatastore(unittest.TestCase):
         )
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "B",
                     "value": "val2",
                     _REV: str(VectorClock({self.client.id: 1})),
@@ -399,7 +424,7 @@ class _TestDatastore(unittest.TestCase):
         )
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "C",
                     "value": "val4",
                     # server get's client's change
@@ -418,10 +443,10 @@ class _TestDatastore(unittest.TestCase):
         # a is in last, to have a higher sequence number than server will
         for item_name in ["i1", "a"]:
             self.client.put(
-                Document({_ID: item_name, "value": 820}), increment_rev=True
+                Document(**{_ID: item_name, "value": 820}), increment_rev=True
             )
             self.client.put(
-                Document({_ID: item_name, "value": 716}), increment_rev=True
+                Document(**{_ID: item_name, "value": 716}), increment_rev=True
             )
 
         # sync leaves both server and client with a
@@ -438,14 +463,14 @@ class _TestDatastore(unittest.TestCase):
         # and A syncs with B, B with C, but A never syncs with C
         # we should still have all three servers agree
         # server makes object A v1
-        self.server.put(Document({_ID: "A", "value": "val1"}), increment_rev=True)
-        self.server.put(Document({_ID: "D", "value": "val3"}), increment_rev=True)
+        self.server.put(Document(**{_ID: "A", "value": "val1"}), increment_rev=True)
+        self.server.put(Document(**{_ID: "D", "value": "val3"}), increment_rev=True)
         # client makes object B v1
-        self.client.put(Document({_ID: "B", "value": "val2"}), increment_rev=True)
-        self.client.put(Document({_ID: "D", "value": "val4"}), increment_rev=True)
+        self.client.put(Document(**{_ID: "B", "value": "val2"}), increment_rev=True)
+        self.client.put(Document(**{_ID: "D", "value": "val4"}), increment_rev=True)
         # third makes object C v1
-        self.third.put(Document({_ID: "C", "value": "val3"}), increment_rev=True)
-        self.third.put(Document({_ID: "D", "value": "val5"}), increment_rev=True)
+        self.third.put(Document(**{_ID: "C", "value": "val3"}), increment_rev=True)
+        self.third.put(Document(**{_ID: "D", "value": "val5"}), increment_rev=True)
 
         # pull server <= client
         logger.debug("*** pull server <= client")
@@ -460,7 +485,7 @@ class _TestDatastore(unittest.TestCase):
         # third only has C and D, since nothing pushed to it
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "C",
                     "value": "val3",
                     _REV: str(VectorClock({self.third.id: 1})),
@@ -471,7 +496,7 @@ class _TestDatastore(unittest.TestCase):
         )
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "D",
                     "value": "val5",
                     _REV: str(VectorClock({self.third.id: 2})),
@@ -489,7 +514,7 @@ class _TestDatastore(unittest.TestCase):
         # server
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "A",
                     "value": "val1",
                     _REV: str(VectorClock({self.server.id: 1})),
@@ -500,7 +525,7 @@ class _TestDatastore(unittest.TestCase):
         )
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "B",
                     "value": "val2",
                     _REV: str(VectorClock({self.client.id: 1})),
@@ -512,7 +537,7 @@ class _TestDatastore(unittest.TestCase):
         # This only succeeds if C traveled from third to client to server!
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "C",
                     "value": "val3",
                     _REV: str(VectorClock({self.third.id: 1})),
@@ -524,7 +549,7 @@ class _TestDatastore(unittest.TestCase):
         # server's D wins
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "D",
                     "value": "val3",
                     _REV: str(VectorClock({self.server.id: 2})),
@@ -538,7 +563,7 @@ class _TestDatastore(unittest.TestCase):
         # client also has C
         self.assertEqual(
             Document(
-                {
+                **{
                     _ID: "C",
                     "value": "val3",
                     _REV: str(VectorClock({self.third.id: 1})),
@@ -558,7 +583,7 @@ class _TestDatastore(unittest.TestCase):
                 datastore.delete(item)
             else:
                 val = random.randint(0, 1000)
-                datastore.put(Document({_ID: item, "value": val}), increment_rev=True)
+                datastore.put(Document(**{_ID: item, "value": val}), increment_rev=True)
 
     def test_long_streaks(self):
         items = [f"item{num}" for num in range(100)]
@@ -595,15 +620,15 @@ class _TestDatastore(unittest.TestCase):
             self.assertTrue(self.third.check())
 
     def test_copy(self):
-        doc = Document({_ID: "A", "value": "val1"})
+        doc = Document(**{_ID: "A", "value": "val1"})
         self.server.put(doc, increment_rev=True)
-        doc["another"] = "foo"
+        doc.another = "foo"
         doc2 = self.server.get("A")
-        self.assertTrue("another" not in doc2)
-        self.assertTrue("another" in doc)
+        self.assertTrue("another" not in doc2.model_dump().keys())
+        self.assertTrue("another" in doc.model_dump().keys())
 
     def test_delete(self):
-        doc = Document({_ID: "A", "value": "val1"})
+        doc = Document(**{_ID: "A", "value": "val1"})
         self.server.put(doc, increment_rev=True)
         doc1 = self.server.get("A")
         self.assertTrue(doc1)
@@ -614,8 +639,8 @@ class _TestDatastore(unittest.TestCase):
 
         # get returns deleted doc if asked
         doc2 = self.server.get("A", include_deleted=True)
-        self.assertEqual(True, doc2["_deleted"])
-        self.assertGreater(doc2[_REV], doc1[_REV])
+        self.assertEqual(True, doc2.deleted)
+        self.assertGreater(doc2.rev, doc1.rev)
 
 
 class TestMemoryDatastore(_TestDatastore):

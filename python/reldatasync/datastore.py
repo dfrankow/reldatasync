@@ -52,28 +52,22 @@ class Datastore(Generic[ID_TYPE], ABC):
         max_seq, docs = self.get_docs_since(0, max_size)
         doc_max_seq = 0
         for doc in docs:
-            docid = doc.get(_ID, "?")
+            docid = doc.id or "?"
 
             # check uniqueness of docid
             if docid in all_docids:
                 logger.warning(f"docid {docid} has repeated id")
             all_docids.add(docid)
 
-            # check docs have _ID, _REV, _SEQ
-            for field in [_ID, _REV, _SEQ]:
-                if field not in doc:
-                    logger.warning(f"doc {docid} has no {field}")
-                    ret = False
-
-            # check doc _SEQ
-            seq = doc.get(_SEQ, None)
+            # check doc seq
+            seq = doc.seq
             if seq in all_seqs:
                 logger.warning(f"docid {docid} has repeated seq {seq}")
             all_seqs.add(seq)
 
             doc_max_seq = max(doc_max_seq, seq)
 
-            if not 0 < doc[_SEQ] <= max_seq:
+            if not 0 < doc.seq <= max_seq:
                 logger.warning(f"doc {docid} has seq out of bounds {seq}")
                 ret = False
 
@@ -84,9 +78,9 @@ class Datastore(Generic[ID_TYPE], ABC):
         return ret
 
     def equals_no_seq(self, other: "Datastore", max_docs: int = 1000):
-        """True if two datastores have the same docs, ignoring the _SEQ key.
+        """True if two datastores have the same docs, ignoring the seq key.
 
-        _SEQ is local to a datastore, it can differ due to 'last write wins'.
+        seq is local to a datastore, it can differ due to 'last write wins'.
 
         This reads all docs from both datastores into memory.
         """
@@ -145,9 +139,9 @@ class Datastore(Generic[ID_TYPE], ABC):
 
     def _set_new_rev(self, doc: Document, seq_id: int) -> None:
         """Set increment_rev revision for a doc."""
-        rev = VectorClock.from_string(doc.get(_REV, "{}"))
+        rev = VectorClock.from_string(doc.rev or "{}")
         rev.set_clock(self.id, seq_id)
-        doc[_REV] = str(rev)
+        doc.rev = str(rev)
 
     def new_rev_and_seq(self, rev_str):
         """Get a new rev and seq for use saving without the 'put' method."""
@@ -174,20 +168,18 @@ class Datastore(Generic[ID_TYPE], ABC):
         :param increment_rev  If True, increment revision.  If revision is
                               not present, it adds one.
         """
-        if not increment_rev and _REV not in doc:
-            raise ValueError(
-                f"doc {doc.get(_ID, '')} must have {_REV}" f" if increment_rev is False"
-            )
+        if not increment_rev and not doc.rev:
+            raise ValueError(f"doc {doc.id} must have rev if increment_rev is False")
 
         assert doc.__class__ == Document, f"doc class is {doc.__class__}"
 
         # copy doc so we don't modify caller's doc
-        doc = doc.copy()
+        doc = doc.model_copy()
 
         ret = 0
-        docid = doc[_ID]
+        docid = doc.id
 
-        rev_str = doc.get(_REV, None)
+        rev_str = doc.rev
         if increment_rev:
             if rev_str is None:
                 rev_str = "{}"
@@ -204,7 +196,7 @@ class Datastore(Generic[ID_TYPE], ABC):
 
         my_doc = self.get(docid, include_deleted=True)
 
-        my_rev = VectorClock.from_string(my_doc.get(_REV)) if my_doc else None
+        my_rev = VectorClock.from_string(my_doc.rev) if my_doc else None
         if (my_rev is None) or (my_rev < rev):
             seq_id = self._increment_sequence_id()
             if increment_rev:
@@ -213,10 +205,10 @@ class Datastore(Generic[ID_TYPE], ABC):
                 # use the one we just got
                 rev.set_clock(self.id, seq_id)
                 assert _REV not in doc or rev > VectorClock.from_string(
-                    doc[_REV]
-                ), "rev did not increase: {rev} !> {doc[_REV]} "
-                doc[_REV] = str(rev)
-            doc[_SEQ] = seq_id
+                    doc.rev
+                ), "rev did not increase: {rev} !> {doc.rev} "
+                doc.rev = str(rev)
+            doc.seq = seq_id
             self._put(doc)
             ret = 1
 
@@ -239,12 +231,12 @@ class Datastore(Generic[ID_TYPE], ABC):
         Returns silently if the doc is not in the datastore.
         """
         doc = self.get(docid)
-        assert doc is None or _REV in doc
-        if doc and not doc.get(_DELETED, False):
-            doc[_DELETED] = True
+        assert doc is None or doc.rev
+        if doc and not doc.deleted:
+            doc.deleted = True
             # Deletion makes a increment_rev rev
             seq_id = self._increment_sequence_id()
-            doc[_SEQ] = seq_id
+            doc.seq = seq_id
             self._set_new_rev(doc, seq_id)
             logger.debug(f"{self.id}: after delete {doc}")
             self._put(doc)
@@ -300,17 +292,17 @@ class MemoryDatastore(Datastore):
         doc = self.datastore.get(docid, None)
         if doc:
             # Return a copy so our internals cannot be modified
-            doc = doc.copy()
+            doc = doc.model_copy()
             # don't include deleted docs
-            if not include_deleted and doc.get(_DELETED, False):
+            if not include_deleted and doc.deleted:
                 logger.debug(f"Don't return deleted doc {doc}")
                 doc = None
         return doc
 
     def _put(self, doc: Document) -> None:
         """Put doc under docid."""
-        assert _REV in doc
-        docid = doc[_ID]
+        assert doc.rev
+        docid = doc.id
         self.datastore[docid] = doc
         # preserve doc key order
         self.datastore.move_to_end(docid)
@@ -325,7 +317,7 @@ class MemoryDatastore(Datastore):
         """
         docs = []
         for _docid, doc in self.datastore.items():
-            doc_seq = doc[_SEQ]
+            doc_seq = doc.seq
             assert doc_seq is not None
             if the_seq < doc_seq <= (the_seq + num):
                 docs.append(doc)
@@ -365,10 +357,7 @@ class DatabaseDatastore(Datastore, ABC):
         # pylint: disable-next=consider-using-enumerate
         for idx in range(len(docrow)):
             the_dict[self.columnnames[idx]] = docrow[idx]
-        # Treat '_deleted' specially: get rid of it if it's None
-        if the_dict[_DELETED] is None:
-            del the_dict[_DELETED]
-        return Document(the_dict)
+        return Document(**the_dict)
 
     def __enter__(self):
         super().__enter__()
@@ -559,7 +548,7 @@ class SqliteDatastore(DatabaseDatastore):
             # assert there was only one result
             assert self.cursor.fetchone() is None, f"docid was {docid}"
             # Don't include deleted doc
-            if doc.get(_DELETED, False) and not include_deleted:
+            if doc.deleted and not include_deleted:
                 doc = None
         return doc
 
@@ -631,7 +620,7 @@ class PostgresDatastore(DatabaseDatastore):
             # assert there was only one result
             assert self.cursor.fetchone() is None, f"docid was {docid}"
             # Don't include deleted doc
-            if doc.get(_DELETED, False) and not include_deleted:
+            if doc.deleted and not include_deleted:
                 doc = None
         return doc
 

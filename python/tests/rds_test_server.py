@@ -97,7 +97,7 @@ def create_app():
                 for the_doc in request.json:
                     increment_rev = request.args.get("increment_rev", False) == "True"
                     num, new_doc = datastore.put(
-                        Document(the_doc), increment_rev=increment_rev
+                        Document(**the_doc), increment_rev=increment_rev
                     )
                     num_put += num
                     new_docs.append(new_doc)

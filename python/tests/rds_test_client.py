@@ -6,7 +6,7 @@ import logging
 import requests
 from reldatasync import util
 from reldatasync.datastore import MemoryDatastore, RestClientSourceDatastore
-from reldatasync.document import _ID, Document
+from reldatasync.document import _ID, Document, to_dicts
 from reldatasync.replicator import Replicator
 
 logger = logging.getLogger(__name__)
@@ -55,12 +55,12 @@ def main():
     assert js["current_sequence_id"] == 0
 
     # Put three docs in table1
-    d1 = Document({"_id": "1", "var1": "value1"})
-    d2 = Document({"_id": "2", "var1": "value2"})
-    d3 = Document({"_id": "3", "var1": "value3"})
+    d1 = Document(**{"_id": "1", "var1": "value1"})
+    d2 = Document(**{"_id": "2", "var1": "value2"})
+    d3 = Document(**{"_id": "3", "var1": "value3"})
     data = [d1, d2, d3]
     resp = requests.post(
-        server_url("table1/docs"), params={"increment_rev": True}, json=data
+        server_url("table1/docs"), params={"increment_rev": True}, json=to_dicts(data)
     )
     assert resp.status_code == 200, resp.status_code
     ct = resp.headers["content-type"]
@@ -76,7 +76,7 @@ def main():
 
     # Put the same three docs in table1, num_docs_put==0
     # TODO: should we add increment_rev, and change server to check clocks?
-    resp = requests.post(server_url("table1/docs"), json=data)
+    resp = requests.post(server_url("table1/docs"), json=to_dicts(data))
     assert resp.status_code == 422, resp.status_code
     assert (
         resp.content == b"doc 1 must have _rev if increment_rev is False"
@@ -105,11 +105,11 @@ def main():
     ds = MemoryDatastore("client")
     # this id '1' will be different from table1 above, because we are
     # putting it in a different datastore with increment_rev=True
-    d1a = Document({"_id": "1", "var1": "value1a"})
-    d4 = Document({"_id": "4", "var1": "value4"})
-    d5 = Document({"_id": "5", "var1": "value5"})
+    d1a = Document(**{"_id": "1", "var1": "value1a"})
+    d4 = Document(**{"_id": "4", "var1": "value4"})
+    d5 = Document(**{"_id": "5", "var1": "value5"})
     for doc in [d1a, d4, d5]:
-        num, new_doc = ds.put(Document(doc), increment_rev=True)
+        num, new_doc = ds.put(doc.model_copy(), increment_rev=True)
         assert num
         assert new_doc
         assert new_doc == ds.get(doc[_ID])
