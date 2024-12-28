@@ -5,6 +5,7 @@ We use JSON, but have to augment it with date and datetime functionality.
 
 The encoding can use python types, but the decoding depends on the datastore.
 """
+
 import json
 from datetime import date, datetime
 

@@ -1,4 +1,5 @@
 """An abstraction of a datastore, to use for syncing."""
+
 import functools
 import logging
 import sqlite3
@@ -70,8 +71,7 @@ class Datastore(Generic[ID_TYPE], ABC):
                 logger.warning(f"docid {docid} has repeated seq {seq}")
             all_seqs.add(seq)
 
-            if seq > doc_max_seq:
-                doc_max_seq = seq
+            doc_max_seq = max(doc_max_seq, seq)
 
             if not 0 < doc[_SEQ] <= max_seq:
                 logger.warning(f"doc {docid} has seq out of bounds {seq}")
