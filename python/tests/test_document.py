@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from reldatasync.document import _ID, Document, DocumentEncoder
+from reldatasync.document import _ID, Document, to_dicts
 
 
 class TestDocument(unittest.TestCase):
@@ -49,8 +49,25 @@ class TestDocument(unittest.TestCase):
             data,
         )
 
-        # DocumentEncoder
+    def test_to_dicts(self):
+        doc1 = Document(_id="A", value="val1")
+        doc2 = Document(_id="B", value="val2")
         self.assertEqual(
-            json.loads(json.dumps(doc1, cls=DocumentEncoder)),
-            data,
+            [
+                {
+                    "_deleted": False,
+                    "_id": "A",
+                    "_rev": None,
+                    "_seq": None,
+                    "value": "val1",
+                },
+                {
+                    "_deleted": False,
+                    "_id": "B",
+                    "_rev": None,
+                    "_seq": None,
+                    "value": "val2",
+                },
+            ],
+            to_dicts([doc1, doc2]),
         )

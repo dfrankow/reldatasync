@@ -1,18 +1,16 @@
-from json import JSONEncoder
-
 from pydantic import BaseModel, Field, Extra
-from typing import Optional, Set
+from typing import Optional, Set, Sequence
 
 from typing import TypeVar
 
 # _REV is a vector clock of revisions from every process that changed the doc
-_REV = "_rev"
+_REV = "rev"
 # _SEQ is a sequence number local to a datastore that says when it was inserted
-_SEQ = "_seq"
+_SEQ = "seq"
 # _ID is a globally unique identifier
-_ID = "_id"
+_ID = "id"
 # _DELETED is True if the doc has been deleted
-_DELETED = "_deleted"
+_DELETED = "deleted"
 
 ID_TYPE = TypeVar("ID_TYPE")
 
@@ -108,10 +106,5 @@ class Document(BaseModel):
         return self.compare(other) != -1
 
 
-class DocumentEncoder(JSONEncoder):
-    """Custom encoder for json module."""
-
-    def default(self, o):
-        if hasattr(o, "model_dump"):
-            return o.model_dump(by_alias=True)
-        return super().default(o)
+def to_dicts(docs: Sequence[Document]) -> list[dict]:
+    return [doc.model_dump(by_alias=True) for doc in docs]
