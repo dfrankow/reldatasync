@@ -1,3 +1,6 @@
+from pydantic import BaseModel, Field, Extra
+from typing import Optional, Set
+
 from typing import TypeVar
 
 # _REV is a vector clock of revisions from every process that changed the doc
@@ -12,11 +15,21 @@ _DELETED = "_deleted"
 ID_TYPE = TypeVar("ID_TYPE")
 
 
-class Document(dict):
-    def __init__(self, *arg, **kw):
-        super().__init__(*arg, **kw)
-        if _ID not in self:
-            raise ValueError(f"Document must have {_ID}")
+class Document(BaseModel):
+    id: str = Field(..., alias="_id")
+    seq: int = Field(alias="_seq", default=None)
+    rev: str = Field(alias="_rev", default=None)
+    deleted: bool = Field(alias="_deleted", default=False)
+
+    class Config:
+        # Allow initialization by either field names or aliases
+        populate_by_name = True
+        # Allow additional fields to be added dynamically
+        extra = Extra.allow
+
+    def to_dict(self) -> dict:
+        # Serialize the model into a dictionary, including extra fields
+        return self.dict(by_alias=True)
 
     @staticmethod
     def _compare_vals(one, two) -> int:
@@ -33,45 +46,49 @@ class Document(dict):
             return 1
         return 0
 
-    def compare(self, other: "Document", ignore_keys: set[str] = None) -> int:
-        """Return -1 if self < other, 0 if equal, 1 if self > other or other is None.
+    def compare(self, other: Optional["Document"], ignore_keys: Set[str] = None) -> int:
+        """Compare this Document to another.
 
-        Compare keys and values.
+        Return -1 if self < other, 0 if equal, 1 if self > other or other is None.
 
-        :param other  Document to which to compare
-        :param ignore_keys  Ignore these keys when comparing"""
-        keys = set(self.keys())
+        :param other: Document to compare with.
+        :param ignore_keys: Keys to ignore during comparison.
+        """
+        # Retrieve field names and extra fields for self
+        self_dict = self.model_dump(by_alias=True)
+        other_dict = other.model_dump(by_alias=True) if other else None
+
+        # Exclude ignored keys
         if ignore_keys:
-            keys = keys.difference(ignore_keys)
-        keys = sorted(keys)
+            self_dict = {k: v for k, v in self_dict.items() if k not in ignore_keys}
+            if other_dict:
+                other_dict = {
+                    k: v for k, v in other_dict.items() if k not in ignore_keys
+                }
 
-        other_keys = set(other.keys()) if other else None
-        if other_keys:
-            if ignore_keys:
-                other_keys = other_keys.difference(ignore_keys)
-            other_keys = sorted(other_keys)
+        # Sort keys
+        self_keys = sorted(self_dict.keys())
+        other_keys = sorted(other_dict.keys()) if other_dict else None
 
-        # compare keys
-        if other is None or len(keys) > len(other_keys):
+        # Compare key sets
+        if other is None or len(self_keys) > len(other_keys):
             return 1
-        if len(keys) < len(other_keys):
+        if len(self_keys) < len(other_keys):
             return -1
 
-        # same number of keys, now compare them
-        # pylint: disable-next=consider-using-enumerate
-        for idx in range(len(keys)):
-            keycmp = Document._compare_vals(keys[idx], other_keys[idx])
+        # Compare keys themselves
+        for key, other_key in zip(self_keys, other_keys):
+            keycmp = self._compare_vals(key, other_key)
             if keycmp != 0:
                 return keycmp
 
-        # keys were all the same, now compare values
-        # pylint: disable-next=consider-using-enumerate
-        for idx in range(len(keys)):
-            valcmp = Document._compare_vals(self[keys[idx]], other[other_keys[idx]])
+        # Compare values corresponding to keys
+        for key, other_key in zip(self_keys, other_keys):
+            valcmp = self._compare_vals(self_dict[key], other_dict[other_key])
             if valcmp != 0:
                 return valcmp
 
-        # everything was equal
+        # Everything is equal
         return 0
 
     def __eq__(self, other):
@@ -91,6 +108,3 @@ class Document(dict):
 
     def __ge__(self, other):
         return self.compare(other) != -1
-
-    def copy(self) -> "Document":
-        return Document(super().copy())
