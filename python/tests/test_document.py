@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from reldatasync.document import _ID, Document
+from reldatasync.document import _ID, Document, DocumentEncoder
 
 
 class TestDocument(unittest.TestCase):
@@ -37,7 +37,20 @@ class TestDocument(unittest.TestCase):
 
     def test_json(self):
         doc1 = Document(_id="A", value="val1")
+        data = {
+            "_id": "A",
+            "_seq": None,
+            "_rev": None,
+            "_deleted": False,
+            "value": "val1",
+        }
         self.assertEqual(
-            json.loads(doc1.json()),
-            {"id": "A", "seq": None, "rev": None, "deleted": False, "value": "val1"},
+            json.loads(doc1.model_dump_json(by_alias=True)),
+            data,
+        )
+
+        # DocumentEncoder
+        self.assertEqual(
+            json.loads(json.dumps(doc1, cls=DocumentEncoder)),
+            data,
         )

@@ -1,3 +1,5 @@
+from json import JSONEncoder
+
 from pydantic import BaseModel, Field, Extra
 from typing import Optional, Set
 
@@ -104,3 +106,12 @@ class Document(BaseModel):
 
     def __ge__(self, other):
         return self.compare(other) != -1
+
+
+class DocumentEncoder(JSONEncoder):
+    """Custom encoder for json module."""
+
+    def default(self, o):
+        if hasattr(o, "model_dump"):
+            return o.model_dump(by_alias=True)
+        return super().default(o)
