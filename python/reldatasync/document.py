@@ -27,10 +27,6 @@ class Document(BaseModel):
         # Allow additional fields to be added dynamically
         extra = Extra.allow
 
-    def to_dict(self) -> dict:
-        # Serialize the model into a dictionary, including extra fields
-        return self.dict(by_alias=True)
-
     @staticmethod
     def _compare_vals(one, two) -> int:
         # comparisons have to happen in the right order to respect None

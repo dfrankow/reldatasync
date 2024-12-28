@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from reldatasync.document import _ID, Document
@@ -33,3 +34,10 @@ class TestDocument(unittest.TestCase):
         # inequality with None doc
         self.assertLess(None, doc1)
         self.assertLess(None, doc2)
+
+    def test_json(self):
+        doc1 = Document(_id="A", value="val1")
+        self.assertEqual(
+            json.loads(doc1.json()),
+            {"id": "A", "seq": None, "rev": None, "deleted": False, "value": "val1"},
+        )
